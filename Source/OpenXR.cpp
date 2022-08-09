@@ -1,10 +1,10 @@
 #include "layer.h"
 
-XrInstance xrInstanceHandle = XR_NULL_HANDLE;
-XrSystemId xrSystemId = XR_NULL_SYSTEM_ID;
-XrDebugUtilsMessengerEXT xrDebugMessengerHandle = XR_NULL_HANDLE;
+XrInstance xrSharedInstance = XR_NULL_HANDLE;
+XrSystemId xrSharedSystemId = XR_NULL_SYSTEM_ID;
+XrSession xrSharedSession = XR_NULL_HANDLE;
 
-//XrSession xrSessionHandle = XR_NULL_HANDLE;
+XrDebugUtilsMessengerEXT xrDebugMessengerHandle = XR_NULL_HANDLE;
 //XrGraphicsBindingVulkanKHR xrVulkanBindings = {};
 //VkSurfaceKHR xrSurfaceHandle = XR_NULL_HANDLE;
 //uint32_t hmdViewCount = 0;
@@ -14,21 +14,22 @@ uint32_t xrMaxSwapchainWidth = 0;
 uint32_t xrMaxSwapchainHeight = 0;
 bool xrSupportsOrientational = false;
 bool xrSupportsPositional = false;
+bool xrSupportsFovMutable = false;
 
 void XR_initPointers(bool timeConvSupported, bool debugUtilsSupported) {
-	xrGetInstanceProcAddr(xrInstanceHandle, "xrGetVulkanGraphicsRequirements2KHR", (PFN_xrVoidFunction*)&func_xrGetVulkanGraphicsRequirements2KHR);
-	xrGetInstanceProcAddr(xrInstanceHandle, "xrCreateVulkanInstanceKHR", (PFN_xrVoidFunction*)&func_xrCreateVulkanInstanceKHR);
-	xrGetInstanceProcAddr(xrInstanceHandle, "xrCreateVulkanDeviceKHR", (PFN_xrVoidFunction*)&func_xrCreateVulkanDeviceKHR);
-	xrGetInstanceProcAddr(xrInstanceHandle, "xrGetVulkanGraphicsDevice2KHR", (PFN_xrVoidFunction*)&func_xrGetVulkanGraphicsDevice2KHR);
+	xrGetInstanceProcAddr(xrSharedInstance, "xrGetVulkanGraphicsRequirements2KHR", (PFN_xrVoidFunction*)&func_xrGetVulkanGraphicsRequirements2KHR);
+	xrGetInstanceProcAddr(xrSharedInstance, "xrCreateVulkanInstanceKHR", (PFN_xrVoidFunction*)&func_xrCreateVulkanInstanceKHR);
+	xrGetInstanceProcAddr(xrSharedInstance, "xrCreateVulkanDeviceKHR", (PFN_xrVoidFunction*)&func_xrCreateVulkanDeviceKHR);
+	xrGetInstanceProcAddr(xrSharedInstance, "xrGetVulkanGraphicsDevice2KHR", (PFN_xrVoidFunction*)&func_xrGetVulkanGraphicsDevice2KHR);
 
 	if (timeConvSupported) {
-		xrGetInstanceProcAddr(xrInstanceHandle, "xrConvertTimeToWin32PerformanceCounterKHR", (PFN_xrVoidFunction*)&func_xrConvertTimeToWin32PerformanceCounterKHR);
-		xrGetInstanceProcAddr(xrInstanceHandle, "xrConvertWin32PerformanceCounterToTimeKHR", (PFN_xrVoidFunction*)&func_xrConvertWin32PerformanceCounterToTimeKHR);
+		xrGetInstanceProcAddr(xrSharedInstance, "xrConvertTimeToWin32PerformanceCounterKHR", (PFN_xrVoidFunction*)&func_xrConvertTimeToWin32PerformanceCounterKHR);
+		xrGetInstanceProcAddr(xrSharedInstance, "xrConvertWin32PerformanceCounterToTimeKHR", (PFN_xrVoidFunction*)&func_xrConvertWin32PerformanceCounterToTimeKHR);
 	}
 
 	if (debugUtilsSupported) {
-		xrGetInstanceProcAddr(xrInstanceHandle, "xrCreateDebugUtilsMessengerEXT", (PFN_xrVoidFunction*)&func_xrCreateDebugUtilsMessengerEXT);
-		xrGetInstanceProcAddr(xrInstanceHandle, "xrDestroyDebugUtilsMessengerEXT", (PFN_xrVoidFunction*)&func_xrDestroyDebugUtilsMessengerEXT);
+		xrGetInstanceProcAddr(xrSharedInstance, "xrCreateDebugUtilsMessengerEXT", (PFN_xrVoidFunction*)&func_xrCreateDebugUtilsMessengerEXT);
+		xrGetInstanceProcAddr(xrSharedInstance, "xrDestroyDebugUtilsMessengerEXT", (PFN_xrVoidFunction*)&func_xrDestroyDebugUtilsMessengerEXT);
 	}
 }
 
@@ -48,7 +49,7 @@ void XR_DebugUtilsMessengerCallback(XrDebugUtilsMessageSeverityFlagsEXT messageS
 }
 
 void XR_initInstance() {
-	if (xrInstanceHandle != XR_NULL_HANDLE)
+	if (xrSharedInstance != XR_NULL_HANDLE)
 		throw std::runtime_error("Shouldn't initialize the instance twice!");
 
 	uint32_t xrExtensionCount = 0;
@@ -84,6 +85,7 @@ void XR_initInstance() {
 		logPrint("OpenXR runtime doesn't support debug utils (XR_EXT_DEBUG_UTILS)! Errors/debug information will no longer be able to be shown!");
 	}
 
+	// todo: disable debug utils when compiled in release mode
 	std::vector<const char*> enabledExtensions = { XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME, XR_KHR_WIN32_CONVERT_PERFORMANCE_COUNTER_TIME_EXTENSION_NAME };
 	if (debugUtilsSupported) enabledExtensions.emplace_back(XR_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
@@ -94,46 +96,57 @@ void XR_initInstance() {
 	xrInstanceCreateInfo.enabledApiLayerCount = 0;
 	xrInstanceCreateInfo.enabledApiLayerNames = NULL;
 	xrInstanceCreateInfo.applicationInfo = { "BetterVR OpenXR", 1, "Cemu", 1, XR_CURRENT_API_VERSION };
-	checkXRResult(xrCreateInstance(&xrInstanceCreateInfo, &xrInstanceHandle), "Failed to initialize the OpenXR instance!");
+	checkXRResult(xrCreateInstance(&xrInstanceCreateInfo, &xrSharedInstance), "Failed to initialize the OpenXR instance!");
 
 	XR_initPointers(timeConvSupported, debugUtilsSupported);
 
-	XrDebugUtilsMessengerCreateInfoEXT utilsMessengerCreateInfo = { XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
-	utilsMessengerCreateInfo.messageSeverities = XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-	utilsMessengerCreateInfo.messageTypes = XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
-	utilsMessengerCreateInfo.userCallback = (PFN_xrDebugUtilsMessengerCallbackEXT)&XR_DebugUtilsMessengerCallback;
-	func_xrCreateDebugUtilsMessengerEXT(xrInstanceHandle, &utilsMessengerCreateInfo, &xrDebugMessengerHandle);
+	if (debugUtilsSupported) {
+		XrDebugUtilsMessengerCreateInfoEXT utilsMessengerCreateInfo = { XR_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT };
+		utilsMessengerCreateInfo.messageSeverities = XR_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+		utilsMessengerCreateInfo.messageTypes = XR_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | XR_DEBUG_UTILS_MESSAGE_TYPE_CONFORMANCE_BIT_EXT;
+		utilsMessengerCreateInfo.userCallback = (PFN_xrDebugUtilsMessengerCallbackEXT)&XR_DebugUtilsMessengerCallback;
+		func_xrCreateDebugUtilsMessengerEXT(xrSharedInstance, &utilsMessengerCreateInfo, &xrDebugMessengerHandle);
+	}
 
+	// System
 	XrSystemGetInfo xrSystemGetInfo = { XR_TYPE_SYSTEM_GET_INFO };
 	xrSystemGetInfo.formFactor = XR_FORM_FACTOR_HEAD_MOUNTED_DISPLAY;
-	checkXRResult(xrGetSystem(xrInstanceHandle, &xrSystemGetInfo, &xrSystemId), "No (available) head mounted display found!");
+	checkXRResult(xrGetSystem(xrSharedInstance, &xrSystemGetInfo, &xrSharedSystemId), "No (available) head mounted display found!");
 
 	XrSystemProperties xrSystemProperties = { XR_TYPE_SYSTEM_PROPERTIES };
-	checkXRResult(xrGetSystemProperties(xrInstanceHandle, xrSystemId, &xrSystemProperties), "Couldn't get system properties of the given VR headset!");
+	checkXRResult(xrGetSystemProperties(xrSharedInstance, xrSharedSystemId, &xrSystemProperties), "Couldn't get system properties of the given VR headset!");
 	xrMaxSwapchainWidth = xrSystemProperties.graphicsProperties.maxSwapchainImageWidth;
 	xrMaxSwapchainHeight = xrSystemProperties.graphicsProperties.maxSwapchainImageHeight;
 	xrSupportsOrientational = xrSystemProperties.trackingProperties.orientationTracking;
 	xrSupportsPositional = xrSystemProperties.trackingProperties.positionTracking;
+	
+	
+	auto xrViewConf = XR_CreateViewConfiguration();
 
+	// Print configuration used, mostly for debugging purposes
 	logPrint("Acquired system to be used:");
 	logPrint(std::string(" - System Name: ") + xrSystemProperties.systemName);
 	logPrint(std::string(" - Supports Orientation Tracking: ") + (xrSystemProperties.trackingProperties.orientationTracking ? "Yes" : "No"));
 	logPrint(std::string(" - Supports Positional Tracking: ") + (xrSystemProperties.trackingProperties.positionTracking ? "Yes" : "No"));
 	logPrint(std::string(" - Supports Max Swapchain Width: ") + std::to_string(xrSystemProperties.graphicsProperties.maxSwapchainImageWidth));
 	logPrint(std::string(" - Supports Max Swapchain Height: ") + std::to_string(xrSystemProperties.graphicsProperties.maxSwapchainImageHeight));
+	logPrint(std::format(" - [Left] Max View Resolution: w={}, h={} with {} samples", xrViewConf[0].maxImageRectWidth, xrViewConf[0].maxImageRectHeight, xrViewConf[0].maxSwapchainSampleCount));
+	logPrint(std::format(" - [Right] Max View Resolution: w={}, h={}  with {} samples", xrViewConf[1].maxImageRectWidth, xrViewConf[1].maxImageRectHeight, xrViewConf[1].maxSwapchainSampleCount));
+	logPrint(std::format(" - [Left] Recommended View Resolution: w={}, h={}  with {} samples", xrViewConf[0].recommendedImageRectWidth, xrViewConf[0].recommendedImageRectHeight, xrViewConf[0].recommendedSwapchainSampleCount));
+	logPrint(std::format(" - [Right] Recommended View Resolution: w={}, h={}  with {} samples", xrViewConf[1].recommendedImageRectWidth, xrViewConf[1].recommendedImageRectHeight, xrViewConf[0].recommendedSwapchainSampleCount));
 }
 
 void XR_deinitInstance() {
-	if (xrInstanceHandle == XR_NULL_HANDLE)
+	if (xrSharedInstance == XR_NULL_HANDLE)
 		return;
-	checkXRResult(xrDestroyInstance(xrInstanceHandle), "Couldn't destroy xr instance!");
+	checkXRResult(xrDestroyInstance(xrSharedInstance), "Couldn't destroy xr instance!");
 	if (xrDebugMessengerHandle != XR_NULL_HANDLE) {
 		checkXRResult(func_xrDestroyDebugUtilsMessengerEXT(xrDebugMessengerHandle), "Couldn't destroy debug messenger!");
 		xrDebugMessengerHandle = XR_NULL_HANDLE;
 	}
 	XR_deinitPointers();
-	xrInstanceHandle = XR_NULL_HANDLE;
-	xrSystemId = XR_NULL_SYSTEM_ID;
+	xrSharedInstance = XR_NULL_HANDLE;
+	xrSharedSystemId = XR_NULL_SYSTEM_ID;
 	xrMaxSwapchainWidth = 0;
 	xrMaxSwapchainHeight = 0;
 	xrSupportsOrientational = false;
@@ -143,11 +156,11 @@ void XR_deinitInstance() {
 
 void XR_GetSupportedVulkanVersions(XrVersion* minVulkanVersion, XrVersion* maxVulkanVersion) {
 	logPrint("Acquiring supported Vulkan versions...");
-	if (xrInstanceHandle == XR_NULL_HANDLE)
+	if (xrSharedInstance == XR_NULL_HANDLE)
 		XR_initInstance();
 
 	XrGraphicsRequirementsVulkan2KHR xrGraphicsRequirements = { XR_TYPE_GRAPHICS_REQUIREMENTS_VULKAN2_KHR };
-	checkXRResult(func_xrGetVulkanGraphicsRequirements2KHR(xrInstanceHandle, xrSystemId, &xrGraphicsRequirements), "Couldn't get Vulkan requirements for the given VR headset!");
+	checkXRResult(func_xrGetVulkanGraphicsRequirements2KHR(xrSharedInstance, xrSharedSystemId, &xrGraphicsRequirements), "Couldn't get Vulkan requirements for the given VR headset!");
 	logPrint(std::format("OpenXR requires Vulkan versions v{:d}.{:d}.{:d} to v{:d}.{:d}.{:d}", XR_VERSION_MAJOR(xrGraphicsRequirements.minApiVersionSupported), XR_VERSION_MINOR(xrGraphicsRequirements.minApiVersionSupported), XR_VERSION_PATCH(xrGraphicsRequirements.minApiVersionSupported), XR_VERSION_MAJOR(xrGraphicsRequirements.maxApiVersionSupported), XR_VERSION_MINOR(xrGraphicsRequirements.maxApiVersionSupported), XR_VERSION_PATCH(xrGraphicsRequirements.maxApiVersionSupported)));
 
 	*minVulkanVersion = xrGraphicsRequirements.minApiVersionSupported;
@@ -160,7 +173,7 @@ void XR_GetSupportedVulkanVersions(XrVersion* minVulkanVersion, XrVersion* maxVu
 
 VkResult XR_CreateCompatibleVulkanInstance(PFN_vkGetInstanceProcAddr getInstanceProcAddr, const VkInstanceCreateInfo* createInfo, const VkAllocationCallbacks* allocator, VkInstance* vkInstancePtr) {
 	logPrint("Creating OpenXR-compatible Vulkan Instance...");
-	if (xrInstanceHandle == XR_NULL_HANDLE)
+	if (xrSharedInstance == XR_NULL_HANDLE)
 		XR_initInstance();
 
 	XrVersion minVersion = 0;
@@ -172,46 +185,46 @@ VkResult XR_CreateCompatibleVulkanInstance(PFN_vkGetInstanceProcAddr getInstance
 	VkResult result = VK_SUCCESS;
 
 	XrVulkanInstanceCreateInfoKHR vkCreateInstanceInfo = { XR_TYPE_VULKAN_INSTANCE_CREATE_INFO_KHR };
-	vkCreateInstanceInfo.systemId = xrSystemId;
+	vkCreateInstanceInfo.systemId = xrSharedSystemId;
 	vkCreateInstanceInfo.createFlags = 0;
 	vkCreateInstanceInfo.pfnGetInstanceProcAddr = getInstanceProcAddr;
 	vkCreateInstanceInfo.vulkanCreateInfo = createInfo;
-	vkCreateInstanceInfo.vulkanAllocator = allocator;
-	checkXRResult(func_xrCreateVulkanInstanceKHR(xrInstanceHandle, &vkCreateInstanceInfo, vkInstancePtr, &result), "Couldn't create Vulkan instance using OpenXR wrapper!");
+	vkCreateInstanceInfo.vulkanAllocator = NULL;
+	checkXRResult(func_xrCreateVulkanInstanceKHR(xrSharedInstance, &vkCreateInstanceInfo, vkInstancePtr, &result), "Couldn't create Vulkan instance using OpenXR wrapper!");
 
 	return result;
 }
 
 VkPhysicalDevice XR_GetPhysicalDevice(VkInstance vkInstance) {
 	logPrint("Acquiring physical device...");
-	if (xrInstanceHandle == XR_NULL_HANDLE)
+	if (xrSharedInstance == XR_NULL_HANDLE)
 		XR_initInstance();
 
 	VkPhysicalDevice vkPhysicalDevice = VK_NULL_HANDLE;
 
 	XrVulkanGraphicsDeviceGetInfoKHR xrVulkanDeviceInfo = { XR_TYPE_VULKAN_GRAPHICS_DEVICE_GET_INFO_KHR };
-	xrVulkanDeviceInfo.systemId = xrSystemId;
+	xrVulkanDeviceInfo.systemId = xrSharedSystemId;
 	xrVulkanDeviceInfo.vulkanInstance = vkInstance;
-	checkXRResult(func_xrGetVulkanGraphicsDevice2KHR(xrInstanceHandle, &xrVulkanDeviceInfo, &vkPhysicalDevice), "Couldn't get Vulkan Physical Device from OpenXR!");
+	checkXRResult(func_xrGetVulkanGraphicsDevice2KHR(xrSharedInstance, &xrVulkanDeviceInfo, &vkPhysicalDevice), "Couldn't get Vulkan Physical Device from OpenXR!");
 
 	return vkPhysicalDevice;
 }
 
 VkResult XR_CreateCompatibleVulkanDevice(PFN_vkGetInstanceProcAddr getInstanceProcAddr, VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* createInfo, const VkAllocationCallbacks* allocator, VkDevice* vkDevicePtr) {
 	logPrint("Creating OpenXR-compatible Vulkan device...");
-	if (xrInstanceHandle == XR_NULL_HANDLE)
+	if (xrSharedInstance == XR_NULL_HANDLE)
 		XR_initInstance();
 
 	VkResult result = VK_SUCCESS;
 
 	XrVulkanDeviceCreateInfoKHR vkCreateDeviceInfo = { XR_TYPE_VULKAN_DEVICE_CREATE_INFO_KHR };
-	vkCreateDeviceInfo.systemId = xrSystemId;
+	vkCreateDeviceInfo.systemId = xrSharedSystemId;
 	vkCreateDeviceInfo.createFlags = 0;
 	vkCreateDeviceInfo.pfnGetInstanceProcAddr = getInstanceProcAddr;
 	vkCreateDeviceInfo.vulkanPhysicalDevice = physicalDevice;
 	vkCreateDeviceInfo.vulkanCreateInfo = createInfo;
-	vkCreateDeviceInfo.vulkanAllocator = allocator;
-	XrResult createDeviceResult = func_xrCreateVulkanDeviceKHR(xrInstanceHandle, &vkCreateDeviceInfo, vkDevicePtr, &result);
+	vkCreateDeviceInfo.vulkanAllocator = NULL;
+	XrResult createDeviceResult = func_xrCreateVulkanDeviceKHR(xrSharedInstance, &vkCreateDeviceInfo, vkDevicePtr, &result);
 	if (XR_FAILED(createDeviceResult)) {
 		std::string errStr = "During Vulkan device creation, Vulkan threw error "+std::to_string(result)+"!";
 		checkXRResult(createDeviceResult, errStr.c_str());
@@ -220,43 +233,42 @@ VkResult XR_CreateCompatibleVulkanDevice(PFN_vkGetInstanceProcAddr getInstancePr
 	return result;
 }
 
+std::array<XrViewConfigurationView, 2> XR_CreateViewConfiguration() {
+	logPrint("Creating the OpenXR view configuration...");
 
-//// Modify struct that's send through when 
-//std::vector<std::string> extensionStrings = XR_GetRequiredInstanceExtensions();
-//std::vector<const char*> extensionCStrs = {};
-//{
-//	for (uint32_t i = 0; i < pCreateInfo->enabledExtensionCount; i++) {
-//		extensionStrings.push_back(pCreateInfo->ppEnabledExtensionNames[i]);
-//	}
-//
-//	for (std::string& extensionStr : extensionStrings) {
-//		if (std::find(extensionCStrs.begin(), extensionCStrs.end(), extensionStr) == extensionCStrs.end()) {
-//			extensionCStrs.emplace_back(extensionStr.c_str());
-//		}
-//	}
-//
-//	const_cast<VkInstanceCreateInfo*>(pCreateInfo)->enabledExtensionCount = (uint32_t)extensionCStrs.size();
-//	const_cast<VkInstanceCreateInfo*>(pCreateInfo)->ppEnabledExtensionNames = extensionCStrs.data();
-//
-//	logPrint("Successfully added the required instance extensions for OpenXR!");
-//}
+	XrViewConfigurationProperties stereoViewConfiguration = { XR_TYPE_VIEW_CONFIGURATION_PROPERTIES };
+	checkXRResult(xrGetViewConfigurationProperties(xrSharedInstance, xrSharedSystemId, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, &stereoViewConfiguration), "There's no VR headset available that allows stereo rendering!");
+	xrSupportsFovMutable = stereoViewConfiguration.fovMutable;
 
-//// Modify struct that's send through when 
-//std::vector<std::string> extensionStrings = XR_GetRequiredDeviceExtensions();
-//std::vector<const char*> extensionCStrs = {};
-//{
-//	for (uint32_t i = 0; i < pCreateInfo->enabledExtensionCount; i++) {
-//		extensionStrings.push_back(pCreateInfo->ppEnabledExtensionNames[i]);
-//	}
-//
-//	for (std::string& extensionStr : extensionStrings) {
-//		if (std::find(extensionCStrs.begin(), extensionCStrs.end(), extensionStr) == extensionCStrs.end()) {
-//			extensionCStrs.emplace_back(extensionStr.c_str());
-//		}
-//	}
-//
-//	const_cast<VkDeviceCreateInfo*>(pCreateInfo)->enabledExtensionCount = (uint32_t)extensionCStrs.size();
-//	const_cast<VkDeviceCreateInfo*>(pCreateInfo)->ppEnabledExtensionNames = extensionCStrs.data();
-//
-//	logPrint("Successfully added the required device extensions for OpenXR!");
-//}
+	uint32_t eyeViewsConfigurationCount = 0;
+	checkXRResult(xrEnumerateViewConfigurationViews(xrSharedInstance, xrSharedSystemId, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, 0, &eyeViewsConfigurationCount, nullptr), "Can't get number of individual views for stereo view available");
+	if (eyeViewsConfigurationCount != 2) {
+		throw std::runtime_error(std::format("Unexpected amount of views for the stereo configuration? This is not supported! {}", eyeViewsConfigurationCount));
+	}
+	std::array<XrViewConfigurationView, 2> xrViewConf = { XrViewConfigurationView{ XR_TYPE_VIEW_CONFIGURATION_VIEW } , XrViewConfigurationView{ XR_TYPE_VIEW_CONFIGURATION_VIEW } };
+	checkXRResult(xrEnumerateViewConfigurationViews(xrSharedInstance, xrSharedSystemId, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, eyeViewsConfigurationCount, &eyeViewsConfigurationCount, xrViewConf.data()), "Can't get individual views for stereo view available!");
+	logPrint("Successfully created the OpenXR view configuration!");
+
+	return xrViewConf;
+}
+
+XrSession XR_CreateSession(VkInstance vkInstance, VkDevice vkDevice, VkPhysicalDevice vkPhysicalDevice) {
+	logPrint("Creating the OpenXR session...");
+	
+	XrGraphicsBindingVulkan2KHR xrVulkanBindings = { XR_TYPE_GRAPHICS_BINDING_VULKAN2_KHR };
+	xrVulkanBindings.device = vkDevice;
+	xrVulkanBindings.instance = vkInstance;
+	xrVulkanBindings.physicalDevice = vkPhysicalDevice;
+	xrVulkanBindings.queueFamilyIndex = 0;
+	xrVulkanBindings.queueIndex = 0;
+
+	XrSessionCreateInfo sessionCreateInfo = { XR_TYPE_SESSION_CREATE_INFO };
+	sessionCreateInfo.systemId = xrSharedSystemId;
+	sessionCreateInfo.next = &xrVulkanBindings;
+	sessionCreateInfo.createFlags = 0;
+
+	checkXRResult(xrCreateSession(xrSharedInstance, &sessionCreateInfo, &xrSharedSession), "Failed to create Vulkan-based OpenXR session!");
+	
+	logPrint("Successfully created the OpenXR session!");
+	return xrSharedSession;
+}

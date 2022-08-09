@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommand>$(SolutionDir)Cemu\Cemu.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommand>$(SolutionDir)CemuTest\Cemu.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerWorkingDirectory>$(SolutionDir)Cemu\</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerWorkingDirectory>$(SolutionDir)CemuTest\</LocalDebuggerWorkingDirectory>
     <LocalDebuggerEnvironment>VK_LAYER_PATH=$(TargetDir);%VK_LAYER_PATH%
 VK_INSTANCE_LAYERS=VK_LAYER_BetterVR_Layer
 #VK_LOADER_DISABLE_INST_EXT_FILTER=1
@@ -13,11 +13,11 @@ VK_INSTANCE_LAYERS=VK_LAYER_BetterVR_Layer
 #ENABLE_VULKAN_RENDERDOC_CAPTURE=1</LocalDebuggerEnvironment>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <LocalDebuggerCommand>$(SolutionDir)Cemu\Cemu.exe</LocalDebuggerCommand>
+    <LocalDebuggerCommand>$(SolutionDir)CemuTest\Cemu.exe</LocalDebuggerCommand>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerCommandArguments>
     </LocalDebuggerCommandArguments>
-    <LocalDebuggerWorkingDirectory>$(SolutionDir)Cemu\</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerWorkingDirectory>$(SolutionDir)CemuTest\</LocalDebuggerWorkingDirectory>
     <LocalDebuggerEnvironment>VK_LAYER_PATH=$(TargetDir);%VK_LAYER_PATH%
 VK_INSTANCE_LAYERS=VK_LAYER_BetterVR_Layer</LocalDebuggerEnvironment>
   </PropertyGroup>

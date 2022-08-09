@@ -29,7 +29,7 @@
     <ClCompile Include="layer_setup.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="vulkan.cpp">
+    <ClCompile Include="rendering.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="logging.cpp">
@@ -38,7 +38,13 @@
     <ClCompile Include="cemu.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="OpenXR.cpp">
+    <ClCompile Include="openxr.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="framebuffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="steamvr.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

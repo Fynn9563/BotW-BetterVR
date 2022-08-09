@@ -99,11 +99,13 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="framebuffer.cpp" />
     <ClCompile Include="layer_setup.cpp" />
     <ClCompile Include="logging.cpp" />
     <ClCompile Include="cemu.cpp" />
-    <ClCompile Include="OpenXR.cpp" />
-    <ClCompile Include="vulkan.cpp" />
+    <ClCompile Include="openxr.cpp" />
+    <ClCompile Include="rendering.cpp" />
+    <ClCompile Include="steamvr.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="memory.h" />

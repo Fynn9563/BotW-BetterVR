@@ -3,93 +3,18 @@
 constexpr const char* const_BetterVR_Layer_Name = "VK_LAYER_BetterVR_Layer";
 constexpr const char* const_BetterVR_Layer_Description = "Vulkan layer used to breath some VR into BotW for Cemu, using OpenXR!";
 
+// Shared global variables
 std::mutex global_lock;
-
 std::map<void*, VkLayerInstanceDispatchTable> instance_dispatch;
 std::map<void*, VkLayerDispatchTable> device_dispatch;
 
-HMODULE vulkanModule = NULL;
+VkInstance vkSharedInstance = VK_NULL_HANDLE;
+VkPhysicalDevice vkSharedPhysicalDevice = VK_NULL_HANDLE;
+VkDevice vkSharedDevice = VK_NULL_HANDLE;
 
-VkInstance sharedInstance = VK_NULL_HANDLE;
+// Create methods
 PFN_vkGetInstanceProcAddr saved_GetInstanceProcAddr = nullptr;
 PFN_vkGetDeviceProcAddr saved_GetDeviceProcAddr = nullptr;
-PFN_vkCreateInstance next_CreateInstance = nullptr;
-
-// Setup dispatch table
-
-VkInstance steamVrInstance = VK_NULL_HANDLE;
-VkDevice steamVrDevice = VK_NULL_HANDLE;
-PFN_vkCreateInstance top_origCreateInstance = nullptr;
-PFN_vkCreateDevice top_origCreateDevice = nullptr;
-
-VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_NESTED_TOP_CreateDevice(VkPhysicalDevice gpu, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice) {
-	VkResult result = top_origCreateDevice(gpu, pCreateInfo, pAllocator, pDevice);
-	steamVrDevice = *pDevice;
-	logPrint(std::format("Created new NESTED device: {}", (void*)*pDevice));
-	return result;
-}
-
-VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_NESTED_TOP_GetDeviceProcAddr(VkDevice device, const char* pName) {
-	PFN_vkGetDeviceProcAddr top_DeviceProcAddr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(GetProcAddress(reinterpret_cast<HMODULE>(vulkanModule), "vkGetDeviceProcAddr"));
-	
-	if (strcmp(pName, "vkCreateDevice") == 0) {
-		top_origCreateDevice = (PFN_vkCreateDevice)saved_GetDeviceProcAddr(device, pName);
-		return (PFN_vkVoidFunction)Layer_NESTED_TOP_CreateDevice;
-	}
-
-	// Required to self-intercept for compatibility
-	if (strcmp(pName, "vkGetDeviceProcAddr") == 0)
-		return (PFN_vkVoidFunction)Layer_NESTED_TOP_GetDeviceProcAddr;
-	
-	PFN_vkVoidFunction funcRet = nullptr; // saved_GetInstanceProcAddr(device, pName);
-	if (funcRet == nullptr) {
-		funcRet = top_DeviceProcAddr(device, pName);
-		logPrint(std::format("Couldn't resolve using GetDeviceProcAddr, used top-level hook: {} {} {}", pName, (void*)device, (void*)funcRet));
-	}
-	else {
-		logPrint(std::format("Could resolve using GetDeviceProcAddr: {} {} {}", pName, (void*)device, (void*)funcRet));
-	}
-	return funcRet;
-}
-
-VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_NESTED_TOP_CreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance) {
-	VkResult result = top_origCreateInstance(pCreateInfo, pAllocator, pInstance);
-	steamVrInstance = *pInstance;
-	logPrint(std::format("Created new NESTED instance: {}", (void*)*pInstance));
-	return result;
-}
-
-VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_NESTED_GetInstanceProcAddr(VkInstance instance, const char* pName) {	
-	PFN_vkGetInstanceProcAddr top_InstanceProcAddr = reinterpret_cast<PFN_vkGetInstanceProcAddr>(GetProcAddress(reinterpret_cast<HMODULE>(vulkanModule), "vkGetInstanceProcAddr"));
-	
-	if (strcmp(pName, "vkCreateInstance") == 0) {
-		top_origCreateInstance = (PFN_vkCreateInstance)saved_GetInstanceProcAddr(instance, pName);
-		return (PFN_vkVoidFunction)Layer_NESTED_TOP_CreateInstance;
-	}
-	if (strcmp(pName, "vkCreateDevice") == 0) {
-		top_origCreateDevice = (PFN_vkCreateDevice)saved_GetInstanceProcAddr(steamVrInstance, pName);
-		return (PFN_vkVoidFunction)Layer_NESTED_TOP_CreateDevice;
-	}
-	
-	if (strcmp(pName, "vkGetDeviceProcAddr") == 0) {
-		return (PFN_vkVoidFunction)Layer_NESTED_TOP_GetDeviceProcAddr;
-	}
-
-	// Required to self-intercept for compatibility
-	if (strcmp(pName, "vkGetInstanceProcAddr") == 0)
-		return (PFN_vkVoidFunction)Layer_NESTED_GetInstanceProcAddr;
-
-	PFN_vkVoidFunction funcRet = nullptr; // saved_GetInstanceProcAddr(instance, pName);
-	if (funcRet == nullptr) {
-		if (steamVrInstance != nullptr) funcRet = saved_GetInstanceProcAddr(steamVrInstance, pName);
-		else funcRet = top_InstanceProcAddr(instance, pName);
-		logPrint(std::format("Couldn't resolve using GetInstanceProcAddr, used top-level hook: {} {} {}", pName, (void*)instance, (void*)funcRet));
-	}
-	else {
-		logPrint(std::format("Could resolve using GetInstanceProcAddr: {} {} {}", pName, (void*)instance, (void*)funcRet));
-	}
-	return funcRet;
-}
 
 VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateInstance(const VkInstanceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkInstance* pInstance) {
 	// Get link info from pNext
@@ -97,24 +22,22 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateInstance(const VkInstanceCreateI
 	if (chain_info == nullptr) {
 		return VK_ERROR_INITIALIZATION_FAILED;;
 	}
-	
-	// Initialize layer-specific stuff
-	logInitialize();
-	SetEnvironmentVariableA("VK_INSTANCE_LAYERS", NULL);
-
-	vulkanModule = LoadLibraryA("vulkan-1.dll");
 
 	// Get next function from current chain and then move chain to next layer
 	PFN_vkGetInstanceProcAddr next_GetInstanceProcAddr = chain_info->u.pLayerInfo->pfnNextGetInstanceProcAddr;
 	chain_info->u.pLayerInfo = chain_info->u.pLayerInfo->pNext;
+	
+	// Initialize layer-specific stuff
+	logInitialize();
+	SteamVRHook_initialize();
 
 	// Call vkCreateInstance
 	saved_GetInstanceProcAddr = next_GetInstanceProcAddr;
-	VkResult result = XR_CreateCompatibleVulkanInstance(Layer_NESTED_GetInstanceProcAddr, pCreateInfo, pAllocator, pInstance);
+	VkResult result = XR_CreateCompatibleVulkanInstance(SteamVRHook_GetInstanceProcAddr, pCreateInfo, pAllocator, pInstance);
 	if (result != VK_SUCCESS)
 		return result;
 
-	sharedInstance = *pInstance;
+	vkSharedInstance = *pInstance;
 	logPrint("Created Vulkan instance successfully!");
 	
 	VkLayerInstanceDispatchTable dispatchTable = {};
@@ -158,17 +81,17 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_EnumeratePhysicalDevices(VkInstance in
 		uint32_t physicalCount = 0;
 		{
 			scoped_lock l(global_lock);
-			instance_dispatch[GetKey(sharedInstance)].EnumeratePhysicalDevices(sharedInstance, &physicalCount, nullptr);
+			instance_dispatch[GetKey(vkSharedInstance)].EnumeratePhysicalDevices(vkSharedInstance, &physicalCount, nullptr);
 		}
 		std::vector<VkPhysicalDevice> physicalDevicesLocal;
 		physicalDevicesLocal.resize(physicalCount);
 		{
 			scoped_lock l(global_lock);
-			instance_dispatch[GetKey(sharedInstance)].EnumeratePhysicalDevices(sharedInstance, &physicalCount, physicalDevicesLocal.data());
+			instance_dispatch[GetKey(vkSharedInstance)].EnumeratePhysicalDevices(vkSharedInstance, &physicalCount, physicalDevicesLocal.data());
 		}
 		// fixme: actually use the device returned and don't pick the first one!
 		in_XR_GetPhysicalDevice = true;
-		VkPhysicalDevice xrPhysicalDevice = XR_GetPhysicalDevice(sharedInstance);
+		VkPhysicalDevice xrPhysicalDevice = XR_GetPhysicalDevice(vkSharedInstance);
 		in_XR_GetPhysicalDevice = false;
 		if (pPhysicalDevices == nullptr) {
 			*pPhysicalDeviceCount = 1;
@@ -177,6 +100,7 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_EnumeratePhysicalDevices(VkInstance in
 		else {
 			*pPhysicalDeviceCount = 1;
 			*pPhysicalDevices = physicalDevicesLocal.at(0);
+			vkSharedPhysicalDevice = physicalDevicesLocal.at(0);
 			return VK_SUCCESS;
 		}
 	}
@@ -197,10 +121,11 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateDevice(VkPhysicalDevice gpu, con
 	// Call vkCreateDevice
 	saved_GetInstanceProcAddr = next_GetInstanceProcAddr;
 	saved_GetDeviceProcAddr = next_GetDeviceProcAddr;
-	VkResult result = XR_CreateCompatibleVulkanDevice(Layer_NESTED_GetInstanceProcAddr, gpu, pCreateInfo, pAllocator, pDevice);
+	VkResult result = XR_CreateCompatibleVulkanDevice(SteamVRHook_GetInstanceProcAddr, gpu, pCreateInfo, pAllocator, pDevice);
 	if (result != VK_SUCCESS)
 		return result;
 
+	vkSharedDevice = *pDevice;
 	logPrint("Created Vulkan device successfully!");
 
 	VkLayerDispatchTable deviceTable = {};
@@ -254,8 +179,19 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetInstanceProcAddr(VkInstan
 	HOOK_PROC_FUNC(CreateDevice);
 	HOOK_PROC_FUNC(DestroyDevice);
 
+	// todo: sort these out later
 	//HOOK_PROC_FUNC(EnumerateInstanceVersion);
 	HOOK_PROC_FUNC(EnumeratePhysicalDevices);
+
+	// Hook render functions for framebuffer tracking
+	// todo: sort out which ones can't be called using a device
+	HOOK_PROC_FUNC(CreateImage);
+	HOOK_PROC_FUNC(CreateImageView);
+	HOOK_PROC_FUNC(UpdateDescriptorSets);
+	HOOK_PROC_FUNC(CmdBindDescriptorSets);
+	HOOK_PROC_FUNC(CreateRenderPass);
+	HOOK_PROC_FUNC(CmdBeginRenderPass);
+	HOOK_PROC_FUNC(CmdEndRenderPass);
 
 	// Self-intercept for compatibility
 	HOOK_PROC_FUNC(GetInstanceProcAddr);
@@ -269,6 +205,14 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetInstanceProcAddr(VkInstan
 VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetDeviceProcAddr(VkDevice device, const char* pName) {
 	HOOK_PROC_FUNC(CreateDevice);
 	HOOK_PROC_FUNC(DestroyDevice);
+
+	HOOK_PROC_FUNC(CreateImage);
+	HOOK_PROC_FUNC(CreateImageView);
+	HOOK_PROC_FUNC(UpdateDescriptorSets);
+	HOOK_PROC_FUNC(CmdBindDescriptorSets);
+	HOOK_PROC_FUNC(CreateRenderPass);
+	HOOK_PROC_FUNC(CmdBeginRenderPass);
+	HOOK_PROC_FUNC(CmdEndRenderPass);
 
 	// Required to self-intercept for compatibility
 	HOOK_PROC_FUNC(GetDeviceProcAddr);

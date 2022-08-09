@@ -11,9 +11,35 @@ void* GetKey(DispatchableType inst) {
 	return *(void**)inst;
 }
 
+static std::vector<const char*> modifyExtensions(uint32_t* extCount, const char** origExt, std::vector<std::string>* mutateableNewExts) {
+	for (uint32_t i = 0; i < *extCount; i++) {
+		if (std::find(mutateableNewExts->begin(), mutateableNewExts->end(), origExt[i]) == mutateableNewExts->end()) {
+			mutateableNewExts->emplace_back(origExt[i]);
+		}
+	}
+
+	std::vector<const char*> cstrArray(mutateableNewExts->size());
+	*extCount = (uint32_t)mutateableNewExts->size();
+	for (std::string& extensionStr : *mutateableNewExts) {
+		cstrArray.push_back(extensionStr.data());
+	}
+
+	origExt = cstrArray.data();
+}
+
 // layer book-keeping information, to store dispatch tables by key
 extern std::map<void*, VkLayerInstanceDispatchTable> instance_dispatch;
 extern std::map<void*, VkLayerDispatchTable> device_dispatch;
+
+// Shared variables
+// todo: Remove this shortcut, should be reworked into classes
+extern VkInstance vkSharedInstance;
+extern VkPhysicalDevice vkSharedPhysicalDevice;
+extern VkDevice vkSharedDevice;
+
+extern XrInstance xrSharedInstance;
+extern XrSystemId xrSharedSystemId;
+extern XrSession xrSharedSession;
 
 // hook functions
 //VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateRenderPass(VkDevice device, const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass);
@@ -33,21 +59,30 @@ void logTimeElapsed(char* prefixMessage, LARGE_INTEGER time);
 void checkXRResult(XrResult result, const char* errorMessage = nullptr);
 void checkVkResult(VkResult result, const char* errorMessage = nullptr);
 
-
-// EPIC
-VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetInstanceProcAddr(VkInstance instance, const char* pName);
-
-
 // xr functions
 void XR_GetSupportedVulkanVersions(XrVersion* minVulkanVersion, XrVersion* maxVulkanVersion);
 VkResult XR_CreateCompatibleVulkanInstance(PFN_vkGetInstanceProcAddr getInstanceProcAddr, const VkInstanceCreateInfo* vulkanCreateInfo, const VkAllocationCallbacks* vulkanAllocator, VkInstance* vkInstancePtr);
 VkPhysicalDevice XR_GetPhysicalDevice(VkInstance vkInstance);
 VkResult XR_CreateCompatibleVulkanDevice(PFN_vkGetInstanceProcAddr getInstanceProcAddr, VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* createInfo, const VkAllocationCallbacks* allocator, VkDevice* vkDevicePtr);
+std::array<XrViewConfigurationView, 2> XR_CreateViewConfiguration();
+XrSession XR_CreateSession(VkInstance vkInstance, VkDevice vkDevice, VkPhysicalDevice vkPhysicalDevice);
 
-// global variables
-extern VkDevice deviceHandle;
-extern VkPhysicalDevice physicalDeviceHandle;
-extern VkInstance instanceHandle;
+// rendering functions
+void RND_InitRendering();
+
+// SteamVR hooks
+void SteamVRHook_initialize();
+PFN_vkVoidFunction VKAPI_CALL SteamVRHook_GetInstanceProcAddr(VkInstance instance, const char* pName);
+PFN_vkVoidFunction VKAPI_CALL SteamVRHook_GetDeviceProcAddr(VkDevice device, const char* pName);
+
+// framebuffer functions
+VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateImage(VkDevice device, const VkImageCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImage* pImage);
+VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateImageView(VkDevice device, const VkImageViewCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkImageView* pView);
+VK_LAYER_EXPORT void VKAPI_CALL Layer_UpdateDescriptorSets(VkDevice device, uint32_t descriptorWriteCount, const VkWriteDescriptorSet* pDescriptorWrites, uint32_t descriptorCopyCount, const VkCopyDescriptorSet* pDescriptorCopies);
+VK_LAYER_EXPORT void VKAPI_CALL Layer_CmdBindDescriptorSets(VkCommandBuffer commandBuffer, VkPipelineBindPoint pipelineBindPoint, VkPipelineLayout layout, uint32_t firstSet, uint32_t descriptorSetCount, const VkDescriptorSet* pDescriptorSets, uint32_t dynamicOffsetCount, const uint32_t* pDynamicOffsets);
+VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateRenderPass(VkDevice device, const VkRenderPassCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkRenderPass* pRenderPass);
+VK_LAYER_EXPORT void VKAPI_CALL Layer_CmdBeginRenderPass(VkCommandBuffer commandBuffer, const VkRenderPassBeginInfo* pRenderPassBegin, VkSubpassContents contents);
+VK_LAYER_EXPORT void VKAPI_CALL Layer_CmdEndRenderPass(VkCommandBuffer commandBuffer);
 
 static bool initializeLayer() {
 	if (!cemuInitialize()) {
