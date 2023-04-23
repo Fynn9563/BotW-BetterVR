@@ -8,8 +8,8 @@ RND_Renderer::RND_Renderer(XrSession xrSession): m_session(xrSession) {
     m_sessionCreateInfo.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     checkXRResult(xrBeginSession(VRManager::instance().XR->GetSession(), &m_sessionCreateInfo), "Failed to begin OpenXR session!");
 
-    m_presentPipelines[std::to_underlying(OpenXR::EyeSide::LEFT)] = std::make_unique<RND_D3D12::PresentPipeline>();
-    m_presentPipelines[std::to_underlying(OpenXR::EyeSide::RIGHT)] = std::make_unique<RND_D3D12::PresentPipeline>();
+    m_presentPipelines[OpenXR::EyeSide::LEFT] = std::make_unique<RND_D3D12::PresentPipeline>();
+    m_presentPipelines[OpenXR::EyeSide::RIGHT] = std::make_unique<RND_D3D12::PresentPipeline>();
 }
 
 RND_Renderer::~RND_Renderer() {
@@ -17,7 +17,7 @@ RND_Renderer::~RND_Renderer() {
 }
 
 void RND_Renderer::StartFrame() {
-    checkAssert(m_textures[std::to_underlying(OpenXR::EyeSide::LEFT)].empty() && m_textures[std::to_underlying(OpenXR::EyeSide::RIGHT)].empty(), "Need to finish rendering the previous frame before starting a new one");
+    checkAssert(m_textures[OpenXR::EyeSide::LEFT].empty() && m_textures[OpenXR::EyeSide::RIGHT].empty(), "Need to finish rendering the previous frame before starting a new one");
 
     XrFrameWaitInfo waitFrameInfo = { XR_TYPE_FRAME_WAIT_INFO };
     checkXRResult(xrWaitFrame(m_session, &waitFrameInfo, &m_frameState), "Failed to wait for next frame!");
@@ -40,14 +40,14 @@ void RND_Renderer::StartFrame() {
 }
 
 void RND_Renderer::Render(OpenXR::EyeSide side, SharedTexture* texture) {
-    m_textures[std::to_underlying(side)].emplace_back(texture);
+    m_textures[side].emplace_back(texture);
 }
 
 void RND_Renderer::EndFrame() {
     VRManager::instance().XR->GetSwapchain(OpenXR::EyeSide::LEFT)->StartRendering();
     VRManager::instance().XR->GetSwapchain(OpenXR::EyeSide::RIGHT)->StartRendering();
 
-    checkAssert(m_textures[std::to_underlying(OpenXR::EyeSide::LEFT)].size() == m_textures[std::to_underlying(OpenXR::EyeSide::RIGHT)].size(), "Did you intend on rendering an unequal amount of textures for each eye.");
+    checkAssert(m_textures[OpenXR::EyeSide::LEFT].size() == m_textures[OpenXR::EyeSide::RIGHT].size(), "Did you intend on rendering an unequal amount of textures for each eye.");
 
     if (m_frameState.shouldRender) {
         XrCompositionLayerProjection frameRenderLayer = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
@@ -107,7 +107,7 @@ void RND_Renderer::EndFrame() {
 
     VRManager::instance().D3D12->EndFrame();
 
-    m_textures[std::to_underlying(OpenXR::EyeSide::LEFT)].clear();
-    m_textures[std::to_underlying(OpenXR::EyeSide::RIGHT)].clear();
+    m_textures[OpenXR::EyeSide::LEFT].clear();
+    m_textures[OpenXR::EyeSide::RIGHT].clear();
     m_layers.clear();
 }

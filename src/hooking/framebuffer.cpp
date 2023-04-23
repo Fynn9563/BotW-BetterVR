@@ -53,8 +53,8 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
             capture.foundSize = it->second.first;
             checkAssert(capture.format == it->second.second, std::format("[WARNING] Got {} as VkFormat instead of the expected {}", it->second.second, capture.format).c_str());
 
-            capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::LEFT)] = std::make_unique<SharedTexture>(capture.foundSize.width, capture.foundSize.height, capture.format, D3D12Utils::ToDXGIFormat(capture.format));
-            capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::RIGHT)] = std::make_unique<SharedTexture>(capture.foundSize.width, capture.foundSize.height, capture.format, D3D12Utils::ToDXGIFormat(capture.format));
+            capture.sharedTextures[OpenXR::EyeSide::LEFT] = std::make_unique<SharedTexture>(capture.foundSize.width, capture.foundSize.height, capture.format, D3D12Utils::ToDXGIFormat(capture.format));
+            capture.sharedTextures[OpenXR::EyeSide::RIGHT] = std::make_unique<SharedTexture>(capture.foundSize.width, capture.foundSize.height, capture.format, D3D12Utils::ToDXGIFormat(capture.format));
             imageResolutions.erase(it);
             foundResolutions--;
             Log::print("Found capture texture {}: res={}x{}, format={}", captureIdx, capture.foundSize.width, capture.foundSize.height, capture.format);
@@ -68,20 +68,20 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
 
                 RND_D3D12::CommandContext<true> transitionInitialTextures(d3d12Device, d3d12Queue, cmdAllocator.Get(), [&sharedTextures](ID3D12GraphicsCommandList* cmdList) {
                     cmdList->SetName(L"transitionInitialTextures");
-                    sharedTextures[std::to_underlying(OpenXR::EyeSide::LEFT)]->d3d12TransitionLayout(cmdList, D3D12_RESOURCE_STATE_COPY_DEST);
-                    sharedTextures[std::to_underlying(OpenXR::EyeSide::LEFT)]->d3d12SignalFence(0);
-                    sharedTextures[std::to_underlying(OpenXR::EyeSide::RIGHT)]->d3d12TransitionLayout(cmdList, D3D12_RESOURCE_STATE_COPY_DEST);
-                    sharedTextures[std::to_underlying(OpenXR::EyeSide::RIGHT)]->d3d12SignalFence(0);
+                    sharedTextures[OpenXR::EyeSide::LEFT]->d3d12TransitionLayout(cmdList, D3D12_RESOURCE_STATE_COPY_DEST);
+                    sharedTextures[OpenXR::EyeSide::LEFT]->d3d12SignalFence(0);
+                    sharedTextures[OpenXR::EyeSide::RIGHT]->d3d12TransitionLayout(cmdList, D3D12_RESOURCE_STATE_COPY_DEST);
+                    sharedTextures[OpenXR::EyeSide::RIGHT]->d3d12SignalFence(0);
                 });
             }
 
             lockImageResolutions.unlock();
         }
 
-        capture.sharedTextures[std::to_underlying(capture.eyeSide)]->CopyFromVkImage(commandBuffer, image);
+        capture.sharedTextures[capture.eyeSide]->CopyFromVkImage(commandBuffer, image);
         capture.captureCmdBuffer = commandBuffer;
-        VRManager::instance().XR->GetRenderer()->Render(OpenXR::EyeSide::LEFT, capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::LEFT)].get());
-        VRManager::instance().XR->GetRenderer()->Render(OpenXR::EyeSide::RIGHT, capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::RIGHT)].get());
+        VRManager::instance().XR->GetRenderer()->Render(OpenXR::EyeSide::LEFT, capture.sharedTextures[OpenXR::EyeSide::LEFT].get());
+        VRManager::instance().XR->GetRenderer()->Render(OpenXR::EyeSide::RIGHT, capture.sharedTextures[OpenXR::EyeSide::RIGHT].get());
         capture.eyeSide = capture.eyeSide == OpenXR::EyeSide::LEFT ? OpenXR::EyeSide::RIGHT : OpenXR::EyeSide::LEFT;
         return;
     }
@@ -153,18 +153,18 @@ VkResult VkDeviceOverrides::QueueSubmit(const vkroots::VkDeviceDispatch* pDispat
                 for (auto& capture : captureTextures) {
                     if (submitInfo.pCommandBuffers[j] == capture.captureCmdBuffer) {
                         // wait for D3D12/XR to finish with previous shared texture render
-                        modifiedSubmitInfo.waitSemaphores.emplace_back(capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::LEFT)]->GetSemaphore());
+                        modifiedSubmitInfo.waitSemaphores.emplace_back(capture.sharedTextures[OpenXR::EyeSide::LEFT]->GetSemaphore());
                         modifiedSubmitInfo.waitDstStageMasks.emplace_back(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                         modifiedSubmitInfo.timelineWaitValues.emplace_back(0);
-                        modifiedSubmitInfo.waitSemaphores.emplace_back(capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::RIGHT)]->GetSemaphore());
+                        modifiedSubmitInfo.waitSemaphores.emplace_back(capture.sharedTextures[OpenXR::EyeSide::RIGHT]->GetSemaphore());
                         modifiedSubmitInfo.waitDstStageMasks.emplace_back(VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
                         modifiedSubmitInfo.timelineWaitValues.emplace_back(0);
 
                         // signal to D3D12/XR rendering that the shared texture can be rendered to VR headset
-                        modifiedSubmitInfo.signalSemaphores.emplace_back(capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::LEFT)]->GetSemaphore());
+                        modifiedSubmitInfo.signalSemaphores.emplace_back(capture.sharedTextures[OpenXR::EyeSide::LEFT]->GetSemaphore());
                         modifiedSubmitInfo.timelineSignalValues.emplace_back(1);
                         capture.captureCmdBuffer = VK_NULL_HANDLE;
-                        modifiedSubmitInfo.signalSemaphores.emplace_back(capture.sharedTextures[std::to_underlying(OpenXR::EyeSide::RIGHT)]->GetSemaphore());
+                        modifiedSubmitInfo.signalSemaphores.emplace_back(capture.sharedTextures[OpenXR::EyeSide::RIGHT]->GetSemaphore());
                         modifiedSubmitInfo.timelineSignalValues.emplace_back(1);
                         capture.captureCmdBuffer = VK_NULL_HANDLE;
                     }

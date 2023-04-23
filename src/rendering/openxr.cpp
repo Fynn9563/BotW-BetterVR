@@ -159,8 +159,8 @@ void OpenXR::CreateSession(const XrGraphicsBindingD3D12KHR& d3d12Binding) {
 
     auto viewConfs = GetViewConfigurations();
     // note: it's possible to make a swapchain that matches Cemu's internal resolution and let the headset downsample it, although I doubt there's a benefit
-    this->m_swapchains[std::to_underlying(EyeSide::LEFT)] = std::make_unique<Swapchain>(viewConfs[0].recommendedImageRectWidth, viewConfs[0].recommendedImageRectHeight, viewConfs[0].recommendedSwapchainSampleCount);
-    this->m_swapchains[std::to_underlying(EyeSide::RIGHT)] = std::make_unique<Swapchain>(viewConfs[1].recommendedImageRectWidth, viewConfs[1].recommendedImageRectHeight, viewConfs[1].recommendedSwapchainSampleCount);
+    this->m_swapchains[EyeSide::LEFT] = std::make_unique<Swapchain>(viewConfs[0].recommendedImageRectWidth, viewConfs[0].recommendedImageRectHeight, viewConfs[0].recommendedSwapchainSampleCount);
+    this->m_swapchains[EyeSide::RIGHT] = std::make_unique<Swapchain>(viewConfs[1].recommendedImageRectWidth, viewConfs[1].recommendedImageRectHeight, viewConfs[1].recommendedSwapchainSampleCount);
 
 
     Log::print("Creating the OpenXR spaces...");
@@ -181,16 +181,16 @@ bool firstInit = true;
 void OpenXR::UpdateTime(EyeSide side, XrTime predictedDisplayTime) {
     if (firstInit) {
         firstInit = false;
-        m_frameTimes[std::to_underlying(EyeSide::LEFT)] = predictedDisplayTime;
-        m_frameTimes[std::to_underlying(EyeSide::RIGHT)] = predictedDisplayTime;
+        m_frameTimes[EyeSide::LEFT] = predictedDisplayTime;
+        m_frameTimes[EyeSide::RIGHT] = predictedDisplayTime;
         return;
     }
-    m_frameTimes[std::to_underlying(side)] = predictedDisplayTime;
+    m_frameTimes[side] = predictedDisplayTime;
 }
 
 void OpenXR::UpdatePoses(EyeSide side) {
     XrSpaceLocation spaceLocation = { XR_TYPE_SPACE_LOCATION };
-    if (XrResult result = xrLocateSpace(m_headSpace, m_stageSpace, m_frameTimes[std::to_underlying(side)], &spaceLocation); XR_SUCCEEDED(result)) {
+    if (XrResult result = xrLocateSpace(m_headSpace, m_stageSpace, m_frameTimes[side], &spaceLocation); XR_SUCCEEDED(result)) {
         if (result != XR_ERROR_TIME_INVALID) {
             checkXRResult(result, "Failed to get space location!");
         }
@@ -201,7 +201,7 @@ void OpenXR::UpdatePoses(EyeSide side) {
     std::array<XrView, 2> views = { XrView{ XR_TYPE_VIEW }, XrView{ XR_TYPE_VIEW } };
     XrViewLocateInfo viewLocateInfo = { XR_TYPE_VIEW_LOCATE_INFO };
     viewLocateInfo.viewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
-    viewLocateInfo.displayTime = m_frameTimes[std::to_underlying(side)];
+    viewLocateInfo.displayTime = m_frameTimes[side];
     viewLocateInfo.space = m_stageSpace;
     XrViewState viewState = { XR_TYPE_VIEW_STATE };
     uint32_t viewCount = views.size();
@@ -209,7 +209,7 @@ void OpenXR::UpdatePoses(EyeSide side) {
     if ((viewState.viewStateFlags & XR_VIEW_STATE_ORIENTATION_VALID_BIT) == 0)
         return;
     
-    m_updatedViews[std::to_underlying(side)] = views[std::to_underlying(side)];
+    m_updatedViews[side] = views[side];
 }
 
 void OpenXR::ProcessEvents() {

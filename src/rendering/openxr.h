@@ -9,7 +9,7 @@ public:
     OpenXR();
     ~OpenXR();
 
-    enum class EyeSide : uint8_t {
+    enum EyeSide : uint8_t {
         LEFT = 0,
         RIGHT = 1
     };
@@ -29,8 +29,8 @@ public:
     void ProcessEvents();
 
     XrSession GetSession() { return m_session; }
-    Swapchain* GetSwapchain(EyeSide side) { return m_swapchains[std::to_underlying(side)].get(); }
-    XrView GetPredictedView(EyeSide side) { return m_updatedViews[std::to_underlying(side)]; };
+    Swapchain* GetSwapchain(EyeSide side) { return m_swapchains[side].get(); }
+    XrView GetPredictedView(EyeSide side) { return m_updatedViews[side]; };
     RND_Renderer* GetRenderer() { return m_renderer.get(); }
 private:
     XrInstance m_instance = XR_NULL_HANDLE;
