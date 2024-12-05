@@ -113,7 +113,7 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
     auto& jumpState = VRManager::instance().XR->m_input.jump;
     // todo: jump normally is done by pressing A
 
-    // sticks
+    // move stick
     uint32_t newXRStickHold = 0;
     static uint32_t oldXRStickHold = 0;
     constexpr float kAxisThreshold = 0.5f;
@@ -131,6 +131,19 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
         newXRStickHold |= VPAD_STICK_L_EMULATION_DOWN;
     else if (moveState.currentState.y >= kAxisThreshold || (HAS_FLAG(oldXRStickHold, VPAD_STICK_L_EMULATION_UP) && moveState.currentState.y >= kHoldAxisThreshold))
         newXRStickHold |= VPAD_STICK_L_EMULATION_UP;
+
+    // camera stick
+    auto& cameraState = VRManager::instance().XR->m_input.camera;
+    vpadStatus.rightStick = {cameraState.currentState.x + vpadStatus.rightStick.x.getLE(), cameraState.currentState.y + vpadStatus.rightStick.y.getLE()};
+    if (cameraState.currentState.x <= -kAxisThreshold || (HAS_FLAG(oldXRStickHold, VPAD_STICK_R_EMULATION_LEFT) && cameraState.currentState.x <= -kHoldAxisThreshold))
+        newXRStickHold |= VPAD_STICK_R_EMULATION_LEFT;
+    else if (cameraState.currentState.x >= kAxisThreshold || (HAS_FLAG(oldXRStickHold, VPAD_STICK_R_EMULATION_RIGHT) && cameraState.currentState.x >= kHoldAxisThreshold))
+        newXRStickHold |= VPAD_STICK_R_EMULATION_RIGHT;
+
+    if (cameraState.currentState.y <= -kAxisThreshold || (HAS_FLAG(oldXRStickHold, VPAD_STICK_R_EMULATION_DOWN) && cameraState.currentState.y <= -kHoldAxisThreshold))
+        newXRStickHold |= VPAD_STICK_R_EMULATION_DOWN;
+    else if (cameraState.currentState.y >= kAxisThreshold || (HAS_FLAG(oldXRStickHold, VPAD_STICK_R_EMULATION_UP) && cameraState.currentState.y >= kHoldAxisThreshold))
+        newXRStickHold |= VPAD_STICK_R_EMULATION_UP;
 
     oldXRStickHold = newXRStickHold;
 

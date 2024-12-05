@@ -2,8 +2,9 @@
 #include "instance.h"
 
 
-static void XR_DebugUtilsMessengerCallback(XrDebugUtilsMessageSeverityFlagsEXT messageSeverity, XrDebugUtilsMessageTypeFlagsEXT messageType, const XrDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
+static XrBool32 XR_DebugUtilsMessengerCallback(XrDebugUtilsMessageSeverityFlagsEXT messageSeverity, XrDebugUtilsMessageTypeFlagsEXT messageType, const XrDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
     //Log::print("[OpenXR Debug Utils] Function {}: {}", callbackData->functionName, callbackData->message);
+    return XR_FALSE;
 }
 
 OpenXR::OpenXR() {
@@ -244,6 +245,14 @@ void OpenXR::CreateActions() {
         moveActionInfo.subactionPaths = m_handPaths.data();
         checkXRResult(xrCreateAction(m_gameplayActionSet, &moveActionInfo, &m_moveAction), "Failed to create move action!");
 
+        XrActionCreateInfo cameraActionInfo = { XR_TYPE_ACTION_CREATE_INFO };
+        cameraActionInfo.actionType = XR_ACTION_TYPE_VECTOR2F_INPUT;
+        strcpy_s(cameraActionInfo.actionName, "camera");
+        strcpy_s(cameraActionInfo.localizedActionName, "Camera");
+        cameraActionInfo.countSubactionPaths = (uint32_t)m_handPaths.size();
+        cameraActionInfo.subactionPaths = m_handPaths.data();
+        checkXRResult(xrCreateAction(m_gameplayActionSet, &cameraActionInfo, &m_cameraAction), "Failed to create camera action!");
+
         XrActionCreateInfo poseActionInfo = { XR_TYPE_ACTION_CREATE_INFO };
         poseActionInfo.actionType = XR_ACTION_TYPE_POSE_INPUT;
         strcpy_s(poseActionInfo.actionName, "pose");
@@ -282,9 +291,9 @@ void OpenXR::CreateActions() {
             XrActionSuggestedBinding{ .action = m_menuAction, .binding = GetXRPath("/user/hand/left/input/y/click") },
 
             XrActionSuggestedBinding{ .action = m_moveAction, .binding = GetXRPath("/user/hand/left/input/thumbstick") },
-            XrActionSuggestedBinding{ .action = m_moveAction, .binding = GetXRPath("/user/hand/right/input/thumbstick") },
+            XrActionSuggestedBinding{ .action = m_cameraAction, .binding = GetXRPath("/user/hand/right/input/thumbstick") },
             XrActionSuggestedBinding{ .action = m_poseAction, .binding = GetXRPath("/user/hand/left/input/grip/pose") },
-            XrActionSuggestedBinding{ .action = m_poseAction, .binding = GetXRPath("/user/hand/right/input/grip/pose") }
+            XrActionSuggestedBinding{ .action = m_poseAction, .binding = GetXRPath("/user/hand/right/input/grip/pose") },
         };
         XrInteractionProfileSuggestedBinding suggestedBindingsInfo = { XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
         suggestedBindingsInfo.interactionProfile = GetXRPath("/interaction_profiles/oculus/touch_controller");
@@ -300,15 +309,15 @@ void OpenXR::CreateActions() {
             XrActionSuggestedBinding{ .action = m_grabAction, .binding = GetXRPath("/user/hand/left/input/squeeze/click") },
             XrActionSuggestedBinding{ .action = m_grabAction, .binding = GetXRPath("/user/hand/right/input/squeeze/click") },
 
-            XrActionSuggestedBinding{ .action = m_jumpAction, .binding = GetXRPath("/user/hand/right/input/a/click") },
-            XrActionSuggestedBinding{ .action = m_cancelAction, .binding = GetXRPath("/user/hand/right/input/b/click") },
+            XrActionSuggestedBinding{ .action = m_jumpAction, .binding = GetXRPath("/user/hand/right/input/trackpad/click") },
+            XrActionSuggestedBinding{ .action = m_cancelAction, .binding = GetXRPath("/user/hand/right/input/thumbstick/click") },
             XrActionSuggestedBinding{ .action = m_mapAction, .binding = GetXRPath("/user/hand/left/input/menu/click") },
             XrActionSuggestedBinding{ .action = m_menuAction, .binding = GetXRPath("/user/hand/right/input/menu/click") },
 
-            XrActionSuggestedBinding{ .action = m_moveAction, .binding = GetXRPath("/user/hand/right/input/thumbstick") },
             XrActionSuggestedBinding{ .action = m_moveAction, .binding = GetXRPath("/user/hand/left/input/thumbstick") },
+            XrActionSuggestedBinding{ .action = m_cameraAction, .binding = GetXRPath("/user/hand/right/input/thumbstick") },
+            XrActionSuggestedBinding{ .action = m_poseAction, .binding = GetXRPath("/user/hand/left/input/grip/pose") },
             XrActionSuggestedBinding{ .action = m_poseAction, .binding = GetXRPath("/user/hand/right/input/grip/pose") },
-            XrActionSuggestedBinding{ .action = m_poseAction, .binding = GetXRPath("/user/hand/left/input/grip/pose") }
         };
         XrInteractionProfileSuggestedBinding suggestedBindingsInfo = { XR_TYPE_INTERACTION_PROFILE_SUGGESTED_BINDING };
         suggestedBindingsInfo.interactionProfile = GetXRPath("/interaction_profiles/microsoft/motion_controller");
@@ -372,6 +381,12 @@ void OpenXR::UpdateActions(XrTime predictedFrameTime) {
     getMoveInfo.subactionPath = XR_NULL_PATH;
     m_input.move = { XR_TYPE_ACTION_STATE_VECTOR2F };
     checkXRResult(xrGetActionStateVector2f(m_session, &getMoveInfo, &m_input.move), "Failed to get move action value!");
+
+    XrActionStateGetInfo getCameraInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
+    getCameraInfo.action = m_cameraAction;
+    getCameraInfo.subactionPath = XR_NULL_PATH;
+    m_input.camera = { XR_TYPE_ACTION_STATE_VECTOR2F };
+    checkXRResult(xrGetActionStateVector2f(m_session, &getCameraInfo, &m_input.camera), "Failed to get camera action value!");
 
     XrActionStateGetInfo getCancelInfo = { XR_TYPE_ACTION_STATE_GET_INFO };
     getCancelInfo.action = m_cancelAction;

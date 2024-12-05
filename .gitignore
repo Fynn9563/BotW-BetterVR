@@ -44,6 +44,9 @@ OpenXR/Debug/
 CemuTest/
 !/Cemu/.gitkeep
 
+/MetaXRSimulator/*
+!/MetaXRSimulator/.gitkeep
+
 ReverseEngineering/
 
 CMakeSettings.json

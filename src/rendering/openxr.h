@@ -37,6 +37,7 @@ public:
         };
 
         XrActionStateVector2f move;
+        XrActionStateVector2f camera;
         XrActionStateBoolean jump;
         XrActionStateBoolean cancel;
 
@@ -82,6 +83,7 @@ private:
     XrAction m_menuAction = XR_NULL_HANDLE;
 
     XrAction m_moveAction = XR_NULL_HANDLE;
+    XrAction m_cameraAction = XR_NULL_HANDLE;
     XrAction m_poseAction = XR_NULL_HANDLE;
 
     std::unique_ptr<RND_Renderer> m_renderer;

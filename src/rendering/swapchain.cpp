@@ -13,7 +13,7 @@ Swapchain<T>::Swapchain(uint32_t width, uint32_t height, uint32_t sampleCount): 
 
         auto found = std::find_first_of(std::begin(xrPreferredFormats), std::end(xrPreferredFormats), std::begin(applicationSupportedFormats), std::end(applicationSupportedFormats));
         if (found == std::end(xrPreferredFormats)) {
-            throw std::runtime_error("OpenXR runtime doesn't support any of the presenting modes that the GPU drivers support.");
+            throw std::runtime_error("OpenXR runtime doesn't support any of the presenting modes that the OpenXR drivers support.");
         }
         return (DXGI_FORMAT)*found;
     };
