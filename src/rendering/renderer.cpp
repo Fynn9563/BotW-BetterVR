@@ -285,7 +285,7 @@ const std::array<XrCompositionLayerProjectionView, 2>& RND_Renderer::Layer3D::Fi
                 }
             },
         },
-        .minDepth = 0.0f,
+        .minDepth = -1.0f,
         .maxDepth = 1.0f,
         .nearZ = 0.1f,
         .farZ = 1000.0f,
@@ -318,7 +318,7 @@ const std::array<XrCompositionLayerProjectionView, 2>& RND_Renderer::Layer3D::Fi
                 }
             },
         },
-        .minDepth = 0.0f,
+        .minDepth = -1.0f,
         .maxDepth = 1.0f,
         .nearZ = 0.1f,
         .farZ = 1000.0f,
