@@ -30,6 +30,8 @@ public:
         SharedTexture* CopyColorToLayer(OpenXR::EyeSide side, VkCommandBuffer copyCmdBuffer, VkImage image);
         SharedTexture* CopyDepthToLayer(OpenXR::EyeSide side, VkCommandBuffer copyCmdBuffer, VkImage image);
         bool HasCopied(OpenXR::EyeSide side) const { return m_copiedColor[side] && m_copiedDepth[side]; };
+        bool HasCopiedColor(OpenXR::EyeSide side) const { return m_copiedColor[side]; };
+        bool HasCopiedDepth(OpenXR::EyeSide side) const { return m_copiedDepth[side]; };
         void PrepareRendering(OpenXR::EyeSide side);
         void StartRendering();
         void Render(OpenXR::EyeSide side);

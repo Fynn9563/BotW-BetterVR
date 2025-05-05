@@ -19,7 +19,7 @@ void CemuHooks::hook_UpdateSettings(PPCInterpreter_t* hCPU) {
 
     std::lock_guard lock(g_settingsMutex);
     g_settings = settings;
-    // s_framesSinceLastCameraUpdate++;
+    s_framesSinceLastCameraUpdate++;
 }
 
 data_VRSettingsIn CemuHooks::GetSettings() {

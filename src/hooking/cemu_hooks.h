@@ -32,6 +32,8 @@ public:
         osLib_registerHLEFunction("coreinit", "hook_GetRenderCamera", &hook_GetRenderCamera);
         osLib_registerHLEFunction("coreinit", "hook_OSReportToConsole", &hook_OSReportToConsole);
         osLib_registerHLEFunction("coreinit", "hook_OSReportToConsole2", &hook_OSReportToConsole2);
+
+        osLib_registerHLEFunction("coreinit", "hook_updateCameraOLD", &hook_updateCameraOLD);
     };
     ~CemuHooks() {
         FreeLibrary(m_cemuHandle);
@@ -60,6 +62,8 @@ private:
     static void hook_modifyHandModelAccessSearch(PPCInterpreter_t* hCPU);
     static void hook_changeWeaponMtx(PPCInterpreter_t* hCPU);
 
+    // todo: remove this in favour of a better tell when the user is updated
+    static void hook_updateCameraOLD(PPCInterpreter_t* hCPU);
     static void hook_BeginCameraSide(PPCInterpreter_t* hCPU);
     static void hook_GetRenderCamera(PPCInterpreter_t* hCPU);
     static void hook_GetRenderProjection(PPCInterpreter_t* hCPU);

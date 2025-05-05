@@ -229,6 +229,12 @@ void VkDeviceOverrides::CmdClearDepthStencilImage(const vkroots::VkDeviceDispatc
                 return;
             }
 
+            if (layer3D->HasCopiedDepth(side)) {
+                // the depth texture has already been copied to the layer
+                Log::print("[VULKAN] A depth texture is already bound for the current frame!");
+                return;
+            }
+
             // if (layer3D.GetStatus() == Status3D::LEFT_BINDING_DEPTH || layer3D.GetStatus() == Status3D::RIGHT_BINDING_DEPTH) {
             //     // seems to always be the case whenever closing the (inventory) menu
             //     Log::print("A depth texture is already bound for the current frame!");

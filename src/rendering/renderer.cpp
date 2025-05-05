@@ -74,7 +74,7 @@ void RND_Renderer::EndFrame() {
         layer3D.space = VRManager::instance().XR->m_stageSpace;
         layer3D.viewCount = (uint32_t)layer3DViews.size();
         layer3D.views = layer3DViews.data();
-        if (CemuHooks::GetFramesSinceLastCameraUpdate() < 2) {
+        if (CemuHooks::GetFramesSinceLastCameraUpdate() <= 2) {
             m_presented3DLastFrame = true;
             compositionLayers.emplace_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer3D));
         }
@@ -212,7 +212,7 @@ void RND_Renderer::Layer3D::Render(OpenXR::EyeSide side) {
         context->Signal(m_depthTextures[side].get(), SEMAPHORE_TO_VULKAN);
         Log::print("[D3D12 - 3D Layer] Signalling for 3D layer's {} side to be 0", side == OpenXR::EyeSide::LEFT ? "left" : "right");
     });
-    Log::print("[D3D12 - 3D Layer] Rendering finished");
+    // Log::print("[D3D12 - 3D Layer] Rendering finished");
 }
 
 const std::array<XrCompositionLayerProjectionView, 2>& RND_Renderer::Layer3D::FinishRendering() {
@@ -351,7 +351,7 @@ void RND_Renderer::Layer2D::Render() {
 
         // wait for both since we only have one 2D swap buffer to render to
         // fixme: Why do we signal to the global command list instead of the local one?!
-        Log::print("[D3D12] Waiting for 2D layer's texture to be 1");
+        Log::print("[D3D12 - 2D Layer] Waiting for 2D layer's texture to be 1");
         context->WaitFor(m_texture.get(), SEMAPHORE_TO_D3D12);
         m_texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 

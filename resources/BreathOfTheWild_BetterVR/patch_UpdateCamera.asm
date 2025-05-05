@@ -210,6 +210,8 @@ blr
 
 ; disable vsync
 0x031FA9C4 = nop
+; disable DOF since it seems to cause crashes at 0x039da5bc when going in/out of your inventory (edit: it doesn't fix the crashes :/)
+0x039DA570 = li r3, 0
 
 
 ; ==================================================================================
