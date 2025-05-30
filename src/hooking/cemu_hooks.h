@@ -45,7 +45,7 @@ public:
     static uint32_t GetFramesSinceLastCameraUpdate() { return s_framesSinceLastCameraUpdate.load(); }
     static uint64_t GetMemoryBaseAddress() { return s_memoryBaseAddress; }
 
-    std::unique_ptr<EntityDebugger> m_entityDebugger;
+    std::unique_ptr<class EntityDebugger> m_entityDebugger;
 
 private:
     HMODULE m_cemuHandle;

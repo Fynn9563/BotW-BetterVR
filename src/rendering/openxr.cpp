@@ -1,7 +1,6 @@
 #include "openxr.h"
 #include "instance.h"
 
-
 static XrBool32 XR_DebugUtilsMessengerCallback(XrDebugUtilsMessageSeverityFlagsEXT messageSeverity, XrDebugUtilsMessageTypeFlagsEXT messageType, const XrDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData) {
     //Log::print("[OpenXR Debug Utils] Function {}: {}", callbackData->functionName, callbackData->message);
     return XR_FALSE;
@@ -381,6 +380,7 @@ std::optional<OpenXR::InputState> OpenXR::UpdateActions(XrTime predictedFrameTim
 
     InputState newState = {};
     newState.inGame.in_game = !inMenu;
+    newState.inGame.inputTime = predictedFrameTime;
 
     if (inMenu) {
         XrActionStateGetInfo getScrollInfo = { XR_TYPE_ACTION_STATE_GET_INFO };

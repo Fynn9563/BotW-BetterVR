@@ -15,11 +15,15 @@ stfs f13, 0x5C4(r31)
 mflr r0
 stwu r1, -0x58(r1)
 stw r0, 0x5C(r1)
+stw r3, 0x54(r1)
 
+lis r3, currentEyeSide@ha
+lwz r3, currentEyeSide@l(r3)
 bl import.coreinit.hook_updateCameraOLD
 
 exit_updateCameraPositionAndTarget:
 ; function epilogue
+lwz r3, 0x54(r1)
 lwz r0, 0x5C(r1)
 mtlr r0
 addi r1, r1, 0x58

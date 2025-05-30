@@ -153,6 +153,7 @@ void EntityDebugger::UpdateEntityMemory() {
             addMemoryRange("Weapon::actorAtk.attackSensorStruct8Ptr", actorPtr + offsetof(Weapon, actorAtk.attackSensorStruct8Ptr), 0x28);
             addField.operator()<BEType<uint16_t>>("Weapon::weaponFlags", offsetof(Weapon, weaponFlags));
             addField.operator()<BEType<uint16_t>>("Weapon::otherFlags", offsetof(Weapon, otherFlags));
+            addField.operator()<BEType<uint32_t>>("Weapon::heldIndex", offsetof(Weapon, field_5F4));
         }
 
         BEMatrix34 mtx = CemuHooks::getMemory<BEMatrix34>(actorPtr + offsetof(ActorWiiU, mtx));

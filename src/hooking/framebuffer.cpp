@@ -124,7 +124,6 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
             SharedTexture* texture = layer3D->CopyColorToLayer(side, commandBuffer, image);
             // Log::print("[VULKAN] Waiting for {} side to be 0", side == OpenXR::EyeSide::LEFT ? "left" : "right");
             s_activeCopyOperations.emplace_back(commandBuffer, texture);
-            Log::print("[VULKAN] Queueing up a 3D_COLOR signal inside cmd buffer {} for {} side", (void*)commandBuffer, side == OpenXR::EyeSide::LEFT ? "left" : "right");
             VulkanUtils::DebugPipelineBarrier(commandBuffer);
             VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 

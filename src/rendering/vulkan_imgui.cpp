@@ -5,6 +5,7 @@
 RND_Vulkan::ImGuiOverlay::ImGuiOverlay(VkCommandBuffer cb, uint32_t width, uint32_t height, VkFormat format) {
     ImGui::CreateContext();
     ImPlot3D::CreateContext();
+    ImPlot::CreateContext();
 
     // get queue
     VkQueue queue = nullptr;
@@ -204,6 +205,7 @@ RND_Vulkan::ImGuiOverlay::~ImGuiOverlay() {
         VRManager::instance().VK->GetDeviceDispatch()->DestroyDescriptorPool(VRManager::instance().VK->GetDevice(), m_descriptorPool, nullptr);
 
     ImGui_ImplVulkan_Shutdown();
+    ImPlot::DestroyContext();
     ImPlot3D::DestroyContext();
     ImGui::DestroyContext();
 }
@@ -271,8 +273,8 @@ void RND_Vulkan::ImGuiOverlay::BeginFrame() {
 
     if (VRManager::instance().Hooks->m_entityDebugger) {
         VRManager::instance().Hooks->m_entityDebugger->DrawEntityInspector();
+        DrawDebugOverlays();
     }
-    DrawDebugOverlays();
 }
 
 void RND_Vulkan::ImGuiOverlay::Draw3DLayerAsBackground(VkCommandBuffer cb, VkImage srcImage, float aspectRatio) {
@@ -315,6 +317,8 @@ void RND_Vulkan::ImGuiOverlay::Update() {
     // scale mouse position with the texture size
     uint32_t framebufferWidth = (uint32_t)ImGui::GetIO().DisplaySize.x;
     uint32_t framebufferHeight = (uint32_t)ImGui::GetIO().DisplaySize.y;
+
+    ImGui::GetIO().FontGlobalScale = 0.9f;
 
     // calculate how many client side pixels are used on the border since its not a 16:9 aspect ratio
     RECT rect;

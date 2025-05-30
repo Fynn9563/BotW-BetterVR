@@ -50,6 +50,7 @@ using Microsoft::WRL::ComPtr;
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
 #include <implot3d.h>
+#include <implot.h>
 
 // glm includes
 #include <glm/glm.hpp>
@@ -57,6 +58,7 @@ using Microsoft::WRL::ComPtr;
 #include <glm/gtc/matrix_access.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 
 inline std::string& toLower(std::string str) {
@@ -438,34 +440,6 @@ struct BESeadLookAtCamera : BESeadCamera {
 #pragma pack(pop)
 static_assert(sizeof(BESeadCamera) == 0x34, "BESeadCamera size mismatch");
 static_assert(sizeof(BESeadLookAtCamera) == 0x58, "BESeadLookAtCamera size mismatch");
-
-struct data_VRCameraIn {
-    BEType<float> posX;
-    BEType<float> posY;
-    BEType<float> posZ;
-    BEType<float> targetX;
-    BEType<float> targetY;
-    BEType<float> targetZ;
-};
-
-struct data_VRCameraOut {
-    BEType<uint32_t> enabled;
-    BEType<float> posX;
-    BEType<float> posY;
-    BEType<float> posZ;
-    BEType<float> targetX;
-    BEType<float> targetY;
-    BEType<float> targetZ;
-};
-
-struct data_VRCameraRotationOut {
-    BEType<uint32_t> enabled;
-    BEType<float> rotX;
-    BEType<float> rotY;
-    BEType<float> rotZ;
-};
-
-
 struct data_VRProjectionMatrixOut {
     BEType<float> aspectRatio;
     BEType<float> fovY;
@@ -473,17 +447,6 @@ struct data_VRProjectionMatrixOut {
     BEType<float> offsetY;
 };
 
-struct data_VRCameraOffsetOut {
-    BEType<float> aspectRatio;
-    BEType<float> fovY;
-    BEType<float> offsetX;
-    BEType<float> offsetY;
-};
-
-struct data_VRCameraAspectRatioOut {
-    BEType<float> aspectRatio;
-    BEType<float> fovY;
-};
 
 enum class ScreenId {
     GamePadBG_00 = 0x0,

@@ -25,6 +25,7 @@ public:
     union InputState {
         struct InGame {
             bool in_game = true;
+            XrTime inputTime;
 
             // shared
             XrActionStateBoolean map;
@@ -45,6 +46,7 @@ public:
         } inGame;
         struct InMenu {
             bool in_game = false;
+            XrTime m_inputTime;
 
             // shared
             XrActionStateBoolean map;
@@ -68,7 +70,7 @@ public:
     void CreateActions();
     std::array<XrViewConfigurationView, 2> GetViewConfigurations();
     std::optional<XrSpaceLocation> UpdateSpaces(XrTime predictedDisplayTime);
-    std::optional<OpenXR::InputState> UpdateActions(XrTime predictedFrameTime, bool inMenu);
+    std::optional<InputState> UpdateActions(XrTime predictedFrameTime, bool inMenu);
     void ProcessEvents();
 
     XrSession GetSession() const { return m_session; }
@@ -89,8 +91,8 @@ private:
     std::array<XrSpace, 2> m_handSpaces = { XR_NULL_HANDLE, XR_NULL_HANDLE };
     std::array<XrPath, 2> m_handPaths = { XR_NULL_PATH, XR_NULL_PATH };
 
-    XrActionSet m_gameplayActionSet = XR_NULL_HANDLE;
     // gameplay actions
+    XrActionSet m_gameplayActionSet = XR_NULL_HANDLE;
     XrAction m_poseAction = XR_NULL_HANDLE;
     XrAction m_moveAction = XR_NULL_HANDLE;
     XrAction m_cameraAction = XR_NULL_HANDLE;

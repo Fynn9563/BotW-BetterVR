@@ -238,12 +238,25 @@ struct Weapon : WeaponBase {
     PADDED_BYTES(0xA18, 0xB58);
 };
 
+static_assert(offsetof(Weapon, setupAttackSensor.resetAttack) == 0x8A0, "Weapon.setupAttackSensor.resetAttack offset mismatch");
+static_assert(offsetof(Weapon, setupAttackSensor.mode) == 0x874, "Weapon.setupAttackSensor.mode offset mismatch");
+
+
+struct ActCamera : ActorWiiU {
+    BEType<uint32_t> dword53C;
+    BEType<float> float540;
+    PADDED_BYTES(0x544, 0x54C);
+    BEMatrix34 origCamMtx;
+    PADDED_BYTES(0x580, 0x5BC);
+    BEMatrix34 finalCamMtx;
+};
+
+static_assert(offsetof(ActCamera, origCamMtx) == 0x550, "ActCamera.origCamMtx offset mismatch");
+static_assert(offsetof(ActCamera, finalCamMtx) == 0x5C0, "ActCamera.finalCamMtx offset mismatch");
+
 #pragma pack(pop)
 
 static_assert(sizeof(ActorWiiU) == 0x53C);
 static_assert(sizeof(WeaponBase) == 0x72C);
 static_assert(sizeof(Weapon) == 0xB5C);
 static_assert(sizeof(DamageMgr) == 0x4C);
-
-static_assert(offsetof(Weapon, setupAttackSensor.resetAttack) == 0x8A0, "Weapon.setupAttackSensor.resetAttack offset mismatch");
-static_assert(offsetof(Weapon, setupAttackSensor.mode) == 0x874, "Weapon.setupAttackSensor.mode offset mismatch");

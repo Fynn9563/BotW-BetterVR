@@ -19,7 +19,6 @@ RND_Renderer::~RND_Renderer() {
 }
 
 void RND_Renderer::StartFrame() {
-    Log::print("RND_Renderer::StartFrame");
     m_isInitialized = true;
 
     XrFrameWaitInfo waitFrameInfo = { XR_TYPE_FRAME_WAIT_INFO };
@@ -44,8 +43,6 @@ void RND_Renderer::StartFrame() {
 
 
 void RND_Renderer::EndFrame() {
-    Log::print("RND_Renderer::EndFrame");
-
     std::vector<XrCompositionLayerBaseHeader*> compositionLayers;
 
     // todo: currently ignores m_frameState.shouldRender, but that's probably fine
@@ -53,7 +50,6 @@ void RND_Renderer::EndFrame() {
     m_presented2DLastFrame = m_layer2D && m_layer2D->HasCopied();
     // checkAssert(m_presented2DLastFrame, "2D layer should always be rendered!");
     if (m_presented2DLastFrame) {
-        Log::print("Presenting 2D layer");
         // The HUD/menus aren't eye-specific, so present the most recent one for both eyes at once
         m_layer2D->StartRendering();
         m_layer2D->Render();
@@ -66,7 +62,6 @@ void RND_Renderer::EndFrame() {
     std::array<XrCompositionLayerProjectionView, 2> layer3DViews = {};
     // checkAssert( m_layer3D->HasCopied(OpenXR::EyeSide::LEFT) == m_layer3D->HasCopied(OpenXR::EyeSide::RIGHT), "3D layer should always be rendered for both eyes at once!");
     if (m_layer3D && m_layer3D->HasCopied(OpenXR::EyeSide::LEFT) && m_layer3D->HasCopied(OpenXR::EyeSide::RIGHT)) {
-        Log::print("Presenting 3D layer");
         m_layer3D->StartRendering();
         m_layer3D->Render(OpenXR::EyeSide::LEFT);
         m_layer3D->Render(OpenXR::EyeSide::RIGHT);
@@ -195,7 +190,6 @@ void RND_Renderer::Layer3D::Render(OpenXR::EyeSide side) {
 
     RND_D3D12::CommandContext<false> renderSharedTexture(device, queue, allocator, [this, side](RND_D3D12::CommandContext<false>* context) {
         context->GetRecordList()->SetName(L"RenderSharedTexture");
-        Log::print("[D3D12] Waiting for 3D layer's {} side to be 1", side == OpenXR::EyeSide::LEFT ? "left" : "right");
         context->WaitFor(m_textures[side].get(), SEMAPHORE_TO_D3D12);
         context->WaitFor(m_depthTextures[side].get(), SEMAPHORE_TO_D3D12);
         m_textures[side]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -211,7 +205,6 @@ void RND_Renderer::Layer3D::Render(OpenXR::EyeSide side) {
         m_depthTextures[side]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
         context->Signal(m_textures[side].get(), SEMAPHORE_TO_VULKAN);
         context->Signal(m_depthTextures[side].get(), SEMAPHORE_TO_VULKAN);
-        Log::print("[D3D12 - 3D Layer] Signalling for 3D layer's {} side to be 0", side == OpenXR::EyeSide::LEFT ? "left" : "right");
     });
     // Log::print("[D3D12 - 3D Layer] Rendering finished");
 }
@@ -352,7 +345,6 @@ void RND_Renderer::Layer2D::Render() {
 
         // wait for both since we only have one 2D swap buffer to render to
         // fixme: Why do we signal to the global command list instead of the local one?!
-        Log::print("[D3D12 - 2D Layer] Waiting for 2D layer's texture to be 1");
         context->WaitFor(m_texture.get(), SEMAPHORE_TO_D3D12);
         m_texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -362,10 +354,8 @@ void RND_Renderer::Layer2D::Render() {
 
         m_texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
         context->Signal(m_texture.get(), SEMAPHORE_TO_VULKAN);
-        Log::print("[D3D12 - 2D Layer] Signalling for 2D layer's texture to be 0");
     });
     m_copiedColor = false;
-    Log::print("[D3D12 - 2D Layer] Rendering finished");
 }
 
 XrCompositionLayerQuad RND_Renderer::Layer2D::FinishRendering(XrTime predictedDisplayTime) {
