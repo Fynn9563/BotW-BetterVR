@@ -142,10 +142,9 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
 
                 // note: Uses vkCmdCopyImage to copy the (right-eye-only) image to the imgui overlay's texture
                 imguiOverlay->Draw3DLayerAsBackground(commandBuffer, image, aspectRatio);
-
-                VulkanUtils::DebugPipelineBarrier(commandBuffer);
-                VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
+            VulkanUtils::DebugPipelineBarrier(commandBuffer);
+            VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
             // clear the image to be transparent to allow for the HUD to be rendered on top of it which results in a transparent HUD layer
             const_cast<VkClearColorValue*>(pColor)[0] = { 0.0f, 0.0f, 0.0f, 0.0f };
@@ -161,7 +160,7 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
             if (layer2D->HasRecordedCopy(frameIdx)) {
                 // the 2D texture has already been copied to the layer
                 Log::print<RENDERING>("A 2D texture has already been copied for the current frame!");
-                const_cast<VkClearColorValue*>(pColor)[0] = { 0.0f, 1.0f, 0.0f, 0.0f };
+                const_cast<VkClearColorValue*>(pColor)[0] = { 0.0f, 0.0f, 0.0f, 0.0f };
                 return pDispatch->CmdClearColorImage(commandBuffer, image, imageLayout, pColor, rangeCount, pRanges);
             }
 

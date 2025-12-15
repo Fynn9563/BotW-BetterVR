@@ -68,7 +68,7 @@ void RND_Renderer::EndFrame() {
         layer3D.space = VRManager::instance().XR->m_stageSpace;
         layer3D.viewCount = (uint32_t)layer3DViews.size();
         layer3D.views = layer3DViews.data();
-        if (CemuHooks::GetFramesSinceLastCameraUpdate() <= 2) {
+        if (CemuHooks::IsInGame()) {
             m_presented3DLastFrame = true;
             compositionLayers.emplace_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&layer3D));
         }
