@@ -114,7 +114,9 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
 
         newXRBtnHold |= mapXRButtonToVpad(inputs.inGame.useRune, VPAD_BUTTON_L);
         newXRBtnHold |= mapXRButtonToVpad(inputs.inGame.throwWeapon, VPAD_BUTTON_R);
-
+        
+        // When closing the dpad menu, this code triggers a grab since it also uses the grips. Will need a fix
+        // Not a big issue unless openning the menu near a grabbable item/weapon.
         if (inputs.inGame.grabState[0].lastEvent == GrabButtonState::Event::ShortPress || inputs.inGame.grabState[1].lastEvent == GrabButtonState::Event::ShortPress)
             newXRBtnHold |= VPAD_BUTTON_A;
 
