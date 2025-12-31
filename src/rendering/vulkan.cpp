@@ -8,6 +8,21 @@ RND_Vulkan::RND_Vulkan(VkInstance vkInstance, VkPhysicalDevice vkPhysDevice, VkD
     m_deviceDispatch = vkroots::tables::LookupDeviceDispatch(vkDevice);
 
     m_physicalDeviceDispatch->GetPhysicalDeviceMemoryProperties2KHR(vkPhysDevice, &m_memoryProperties);
+
+    VkPhysicalDeviceProperties props{};
+    m_instanceDispatch->GetPhysicalDeviceProperties(vkPhysDevice, &props);
+
+    uint64_t localVramBytes = 0;
+    for (uint32_t i = 0; i < m_memoryProperties.memoryProperties.memoryHeapCount; ++i) {
+        if ((m_memoryProperties.memoryProperties.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
+            localVramBytes += m_memoryProperties.memoryProperties.memoryHeaps[i].size;
+        }
+    }
+
+    Log::print<INFO>("GPU: {} (vendor={:#06x}, device={:#06x}, driver={})", props.deviceName, props.vendorID, props.deviceID, props.driverVersion);
+    if (localVramBytes > 0) {
+        Log::print<INFO>("GPU VRAM (device local): {:.2f} GiB", double(localVramBytes) / (1024.0 * 1024.0 * 1024.0));
+    }
 }
 
 RND_Vulkan::~RND_Vulkan() {

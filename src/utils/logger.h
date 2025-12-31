@@ -1,3 +1,4 @@
+#pragma once
 #include "vkroots.h"
 #include <fstream>
 
@@ -255,8 +256,9 @@ public:
         if constexpr (!isLogTypeEnabled<L>()) {
             return;
         }
+        std::lock_guard<std::mutex> lock(logMutex);
         std::string messageStr = std::string(message) + "\n";
-        
+
 #ifndef _DEBUG
         if (logFile.is_open()) {
             logFile << messageStr;
@@ -290,6 +292,7 @@ private:
     static HANDLE consoleHandle;
     static double timeFrequency;
     static std::ofstream logFile;
+    static std::mutex logMutex;
 };
 
 static void checkXRResult(const XrResult result, const char* errorMessage) {

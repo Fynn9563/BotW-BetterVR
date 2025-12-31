@@ -11,7 +11,13 @@ OpenXR::OpenXR() {
     xrEnumerateInstanceExtensionProperties(NULL, 0, &xrExtensionCount, NULL);
     std::vector<XrExtensionProperties> instanceExtensions;
     instanceExtensions.resize(xrExtensionCount, { XR_TYPE_EXTENSION_PROPERTIES, NULL });
-    checkXRResult(xrEnumerateInstanceExtensionProperties(NULL, xrExtensionCount, &xrExtensionCount, instanceExtensions.data()), "Couldn't enumerate OpenXR extensions!");
+    {
+        XrResult result = xrEnumerateInstanceExtensionProperties(NULL, xrExtensionCount, &xrExtensionCount, instanceExtensions.data());
+        if (result == XR_ERROR_RUNTIME_FAILURE) {
+            Log::print<ERROR>("Couldn't enumerate OpenXR extensions! Is the OpenXR runtime installed and set to the correct runtime? Restarting might help, or going to SteamVR/Oculus Link's Settings and making sure OpenXR is enabled.");
+        }
+        checkXRResult(result, "Couldn't enumerate OpenXR extensions!");
+    }
 
     // Create instance with required extensions
     bool d3d12Supported = false;
@@ -63,7 +69,13 @@ OpenXR::OpenXR() {
     xrInstanceCreateInfo.enabledApiLayerCount = 0;
     xrInstanceCreateInfo.enabledApiLayerNames = NULL;
     xrInstanceCreateInfo.applicationInfo = { "BetterVR", 1, "Cemu", 1, XR_API_VERSION_1_0 };
-    checkXRResult(xrCreateInstance(&xrInstanceCreateInfo, &m_instance), "Failed to initialize the OpenXR instance!");
+    {
+        XrResult result = xrCreateInstance(&xrInstanceCreateInfo, &m_instance);
+        if (result == XR_ERROR_RUNTIME_FAILURE) {
+            Log::print<ERROR>("Failed to create OpenXR instance! Is the OpenXR runtime installed and set to the correct runtime? Restarting might help, or going to SteamVR/Oculus Link's Settings and making sure OpenXR is enabled.");
+        }
+        checkXRResult(result, "Failed to initialize the OpenXR instance!");
+    }
 
     // Load extension pointers for this XrInstance
     xrGetInstanceProcAddr(m_instance, "xrGetD3D12GraphicsRequirementsKHR", (PFN_xrVoidFunction*)&func_xrGetD3D12GraphicsRequirementsKHR);
