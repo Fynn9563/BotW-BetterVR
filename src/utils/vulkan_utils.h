@@ -44,6 +44,11 @@ namespace VulkanUtils {
     }
 
     static void TransitionLayout(VkCommandBuffer cmdBuffer, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT) {
+        // AMD GPU FIX: Skip redundant transitions - some AMD drivers are strict about this
+        if (oldLayout == newLayout) {
+            return;
+        }
+
         VkImageMemoryBarrier2 barrier = { VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2 };
         barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
         barrier.srcAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
@@ -54,12 +59,13 @@ namespace VulkanUtils {
         barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         barrier.image = image;
+        // AMD GPU FIX: Use VK_REMAINING to cover all subresources
         barrier.subresourceRange = {
             .aspectMask = aspectMask,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
-            .layerCount = 1
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
         };
 
         VkDependencyInfo dependencyInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO_KHR };

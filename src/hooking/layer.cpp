@@ -152,8 +152,22 @@ VkResult VRLayer::VkInstanceOverrides::CreateInstance(PFN_vkCreateInstance creat
         return createInstanceFunc(pCreateInfo, pAllocator, pInstance);
     }
 
+    // If the application already requested validation, avoid modifying the instance create info.
+    bool appRequestedValidation = false;
+    for (uint32_t i = 0; i < pCreateInfo->enabledLayerCount; ++i) {
+        if (pCreateInfo->ppEnabledLayerNames &&
+            std::strcmp(pCreateInfo->ppEnabledLayerNames[i], "VK_LAYER_KHRONOS_validation") == 0) {
+            appRequestedValidation = true;
+            break;
+        }
+    }
+    if (appRequestedValidation) {
+        Log::print<INFO>("CreateInstance: app requested validation; skipping BetterVR validation/env tweaks for compatibility");
+        return createInstanceFunc(pCreateInfo, pAllocator, pInstance);
+    }
+
     Log::print<INFO>("CreateInstance called - createInstanceFunc={}, pCreateInfo={}, pInstance={}",
-        (void*)createInstanceFunc, (void*)pCreateInfo, (void*)pInstance);
+        (void*)createInstanceFunc, (void*)pCreateInfo, (void*)pInstance);       
 
     // Skip diagnostic query for now - it may be causing crashes with certain drivers/hooks
     // TODO: Re-enable once the crash is fixed
@@ -585,6 +599,9 @@ VkResult VRLayer::VkInstanceOverrides::CreateDevice(const vkroots::VkInstanceDis
     modifiedCreateInfo.ppEnabledLayerNames = pCreateInfo->ppEnabledLayerNames;
     modifiedCreateInfo.enabledExtensionCount = (uint32_t)modifiedExtensions.size();
     modifiedCreateInfo.ppEnabledExtensionNames = modifiedExtensions.data();
+    // AMD GPU FIX: Preserve pEnabledFeatures from original create info
+    // Dropping this can cause AMD drivers to disable features the application needs
+    modifiedCreateInfo.pEnabledFeatures = pCreateInfo->pEnabledFeatures;
 
     // Log queue family selection for diagnostics
     uint32_t queueFamilyCount = 0;

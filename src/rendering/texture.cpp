@@ -5,10 +5,14 @@
 
 
 BaseVulkanTexture::~BaseVulkanTexture() {
-    if (m_vkImage != VK_NULL_HANDLE)
+    if (m_vkImage != VK_NULL_HANDLE) {
         VRManager::instance().VK->GetDeviceDispatch()->DestroyImage(VRManager::instance().VK->GetDevice(), m_vkImage, nullptr);
-    if (m_vkMemory != VK_NULL_HANDLE)
+        m_vkImage = VK_NULL_HANDLE;
+    }
+    if (m_vkMemory != VK_NULL_HANDLE) {
         VRManager::instance().VK->GetDeviceDispatch()->FreeMemory(VRManager::instance().VK->GetDevice(), m_vkMemory, nullptr);
+        m_vkMemory = VK_NULL_HANDLE;
+    }
 }
 
 void BaseVulkanTexture::vkPipelineBarrier(VkCommandBuffer cmdBuffer) {
@@ -41,6 +45,18 @@ void BaseVulkanTexture::vkCopyToImage(VkCommandBuffer cmdBuffer, VkImage dstImag
     };
 
     dispatch->CmdCopyImage(cmdBuffer, m_vkImage, m_vkCurrLayout, dstImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+    // AMD GPU FIX: Add memory barrier after copy to ensure data is visible
+    VkMemoryBarrier2 postCopyBarrier = { VK_STRUCTURE_TYPE_MEMORY_BARRIER_2 };
+    postCopyBarrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    postCopyBarrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    postCopyBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+    postCopyBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT;
+
+    VkDependencyInfo depInfo = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+    depInfo.memoryBarrierCount = 1;
+    depInfo.pMemoryBarriers = &postCopyBarrier;
+    dispatch->CmdPipelineBarrier2(cmdBuffer, &depInfo);
 }
 
 void BaseVulkanTexture::vkClear(VkCommandBuffer cmdBuffer, VkClearColorValue color) {
@@ -52,15 +68,22 @@ void BaseVulkanTexture::vkClear(VkCommandBuffer cmdBuffer, VkClearColorValue col
         return;
     }
 
+    // AMD GPU FIX: Transition to GENERAL if not already in a valid clear layout
+    // CmdClearColorImage requires GENERAL or TRANSFER_DST_OPTIMAL
+    if (m_vkCurrLayout != VK_IMAGE_LAYOUT_GENERAL && m_vkCurrLayout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        VulkanUtils::TransitionLayout(cmdBuffer, m_vkImage, m_vkCurrLayout, VK_IMAGE_LAYOUT_GENERAL);
+        m_vkCurrLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+
     const VkImageSubresourceRange range = {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
         .baseMipLevel = 0,
-        .levelCount = 1,
+        .levelCount = VK_REMAINING_MIP_LEVELS,
         .baseArrayLayer = 0,
-        .layerCount = 1
+        .layerCount = VK_REMAINING_ARRAY_LAYERS
     };
 
-    dispatch->CmdClearColorImage(cmdBuffer, m_vkImage, VK_IMAGE_LAYOUT_GENERAL, &color, 1, &range);
+    dispatch->CmdClearColorImage(cmdBuffer, m_vkImage, m_vkCurrLayout, &color, 1, &range);
 }
 
 void BaseVulkanTexture::vkClearDepth(VkCommandBuffer cmdBuffer, float depth, uint32_t stencil) {
@@ -71,6 +94,13 @@ void BaseVulkanTexture::vkClearDepth(VkCommandBuffer cmdBuffer, float depth, uin
         return;
     }
 
+    // AMD GPU FIX: Transition to GENERAL if not already in a valid clear layout
+    // CmdClearDepthStencilImage requires GENERAL or TRANSFER_DST_OPTIMAL
+    if (m_vkCurrLayout != VK_IMAGE_LAYOUT_GENERAL && m_vkCurrLayout != VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
+        VulkanUtils::TransitionLayout(cmdBuffer, m_vkImage, m_vkCurrLayout, VK_IMAGE_LAYOUT_GENERAL, GetAspectMask());
+        m_vkCurrLayout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+
     VkClearDepthStencilValue clearValue = {
         .depth = depth,
         .stencil = stencil
@@ -79,12 +109,12 @@ void BaseVulkanTexture::vkClearDepth(VkCommandBuffer cmdBuffer, float depth, uin
     const VkImageSubresourceRange range = {
         .aspectMask = GetAspectMask(),
         .baseMipLevel = 0,
-        .levelCount = 1,
+        .levelCount = VK_REMAINING_MIP_LEVELS,
         .baseArrayLayer = 0,
-        .layerCount = 1
+        .layerCount = VK_REMAINING_ARRAY_LAYERS
     };
 
-    dispatch->CmdClearDepthStencilImage(cmdBuffer, m_vkImage, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &range);
+    dispatch->CmdClearDepthStencilImage(cmdBuffer, m_vkImage, m_vkCurrLayout, &clearValue, 1, &range);
 }
 
 void BaseVulkanTexture::vkCopyFromImage(VkCommandBuffer cmdBuffer, VkImage srcImage, VkImageLayout srcLayout) {
@@ -107,12 +137,13 @@ void BaseVulkanTexture::vkCopyFromImage(VkCommandBuffer cmdBuffer, VkImage srcIm
         srcPreBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcPreBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcPreBarrier.image = srcImage;
+        // AMD GPU FIX: Use VK_REMAINING to cover all subresources
         srcPreBarrier.subresourceRange = {
             .aspectMask = aspectMask,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
-            .layerCount = 1
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
         };
 
         VkDependencyInfo preBarrierDep = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
@@ -147,12 +178,13 @@ void BaseVulkanTexture::vkCopyFromImage(VkCommandBuffer cmdBuffer, VkImage srcIm
         srcPostBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcPostBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcPostBarrier.image = srcImage;
+        // AMD GPU FIX: Use VK_REMAINING to cover all subresources
         srcPostBarrier.subresourceRange = {
             .aspectMask = aspectMask,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
-            .layerCount = 1
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
         };
 
         VkDependencyInfo postBarrierDep = { VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
@@ -218,13 +250,13 @@ VulkanTexture::VulkanTexture(uint32_t width, uint32_t height, VkFormat format, V
 }
 
 VulkanTexture::~VulkanTexture() {
-    if (m_vkImageView != VK_NULL_HANDLE)
+    // AMD GPU FIX: Only destroy the image view here.
+    // DO NOT destroy m_vkImage/m_vkMemory - BaseVulkanTexture::~BaseVulkanTexture() handles them.
+    // Double-destroy was causing undefined behavior and AMD-specific crashes.
+    if (m_vkImageView != VK_NULL_HANDLE) {
         VRManager::instance().VK->GetDeviceDispatch()->DestroyImageView(VRManager::instance().VK->GetDevice(), m_vkImageView, nullptr);
-
-    if (m_vkImage != VK_NULL_HANDLE)
-        VRManager::instance().VK->GetDeviceDispatch()->DestroyImage(VRManager::instance().VK->GetDevice(), m_vkImage, nullptr);
-    if (m_vkMemory != VK_NULL_HANDLE)
-        VRManager::instance().VK->GetDeviceDispatch()->FreeMemory(VRManager::instance().VK->GetDevice(), m_vkMemory, nullptr);
+        m_vkImageView = VK_NULL_HANDLE;
+    }
 }
 
 VulkanFramebuffer::VulkanFramebuffer(uint32_t width, uint32_t height, VkFormat format, VkRenderPass renderPass): VulkanTexture(width, height, format, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {
@@ -250,10 +282,17 @@ Texture::Texture(uint32_t width, uint32_t height, DXGI_FORMAT format): m_d3d12Fo
     // This is required for AMD compatibility
     DXGI_FORMAT resourceFormat = D3D12Utils::IsDepthFormat(format) ? D3D12Utils::ToTypelessDepthFormat(format) : format;
 
+    // AMD GPU FIX: Shared resources require:
+    // 1. 64KB alignment (D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT) for AMD interop
+    // 2. ALLOW_SIMULTANEOUS_ACCESS for non-depth to disable DCC compression so Vulkan can read
+    D3D12_RESOURCE_FLAGS flags = D3D12Utils::IsDepthFormat(format)
+        ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
+        : (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_SIMULTANEOUS_ACCESS);
+
     // clang-format off
     D3D12_RESOURCE_DESC textureDesc = {
         .Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-        .Alignment = 0,
+        .Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,  // AMD GPU FIX: Force 64KB alignment
         .Width = width,
         .Height = height,
         .DepthOrArraySize = 1,
@@ -264,7 +303,7 @@ Texture::Texture(uint32_t width, uint32_t height, DXGI_FORMAT format): m_d3d12Fo
             .Quality = 0
         },
         .Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN,
-        .Flags = D3D12Utils::IsDepthFormat(format) ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL : D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+        .Flags = flags
     };
     // clang-format on
 
@@ -325,6 +364,11 @@ Texture::~Texture() {
 }
 
 void Texture::d3d12TransitionLayout(ID3D12GraphicsCommandList* cmdList, D3D12_RESOURCE_STATES state) {
+    // AMD GPU FIX: Skip redundant transitions - transitioning to same state is invalid
+    if (m_currState == state) {
+        return;
+    }
+
     // clang-format off
     D3D12_RESOURCE_BARRIER barrier = {
         .Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
@@ -426,8 +470,10 @@ void SharedTexture::CopyFromVkImage(VkCommandBuffer cmdBuffer, VkImage srcImage,
     s_copyCount++;
 
     auto* dispatch = VRManager::instance().VK->GetDeviceDispatch();
-    bool isDepth = D3D12Utils::IsDepthFormat(this->d3d12GetTexture()->GetDesc().Format);
-    VkImageAspectFlags aspectMask = isDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+    // AMD GPU FIX: Use GetAspectMask() from Vulkan format, NOT D3D12 format detection.
+    // D3D12 depth resources are created as typeless (e.g., DXGI_FORMAT_R32_TYPELESS),
+    // which would incorrectly return false for IsDepthFormat().
+    VkImageAspectFlags aspectMask = GetAspectMask();
 
     // Validate state before copy
     if (srcImage == VK_NULL_HANDLE) {
@@ -462,12 +508,13 @@ void SharedTexture::CopyFromVkImage(VkCommandBuffer cmdBuffer, VkImage srcImage,
     dstBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     dstBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     dstBarrier.image = this->m_vkImage;
+    // AMD GPU FIX: Use VK_REMAINING to cover all subresources
     dstBarrier.subresourceRange = {
         .aspectMask = aspectMask,
         .baseMipLevel = 0,
-        .levelCount = 1,
+        .levelCount = VK_REMAINING_MIP_LEVELS,
         .baseArrayLayer = 0,
-        .layerCount = 1
+        .layerCount = VK_REMAINING_ARRAY_LAYERS
     };
 
     if (callerManagedLayout) {
@@ -488,12 +535,13 @@ void SharedTexture::CopyFromVkImage(VkCommandBuffer cmdBuffer, VkImage srcImage,
         srcBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcBarrier.image = srcImage;
+        // AMD GPU FIX: Use VK_REMAINING to cover all subresources
         srcBarrier.subresourceRange = {
             .aspectMask = aspectMask,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
-            .layerCount = 1
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
         };
 
         VkImageMemoryBarrier2 barriers[2] = { srcBarrier, dstBarrier };
@@ -527,12 +575,13 @@ void SharedTexture::CopyFromVkImage(VkCommandBuffer cmdBuffer, VkImage srcImage,
     dstPostBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     dstPostBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
     dstPostBarrier.image = this->m_vkImage;
+    // AMD GPU FIX: Use VK_REMAINING to cover all subresources
     dstPostBarrier.subresourceRange = {
         .aspectMask = aspectMask,
         .baseMipLevel = 0,
-        .levelCount = 1,
+        .levelCount = VK_REMAINING_MIP_LEVELS,
         .baseArrayLayer = 0,
-        .layerCount = 1
+        .layerCount = VK_REMAINING_ARRAY_LAYERS
     };
 
     if (callerManagedLayout) {
@@ -553,12 +602,13 @@ void SharedTexture::CopyFromVkImage(VkCommandBuffer cmdBuffer, VkImage srcImage,
         srcPostBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcPostBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         srcPostBarrier.image = srcImage;
+        // AMD GPU FIX: Use VK_REMAINING to cover all subresources
         srcPostBarrier.subresourceRange = {
             .aspectMask = aspectMask,
             .baseMipLevel = 0,
-            .levelCount = 1,
+            .levelCount = VK_REMAINING_MIP_LEVELS,
             .baseArrayLayer = 0,
-            .layerCount = 1
+            .layerCount = VK_REMAINING_ARRAY_LAYERS
         };
 
         VkImageMemoryBarrier2 postBarriers[2] = { srcPostBarrier, dstPostBarrier };

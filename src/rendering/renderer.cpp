@@ -169,14 +169,14 @@ RND_Renderer::Layer3D::Layer3D(VkExtent2D extent) {
         RND_D3D12::CommandContext<true> transitionInitialTextures(d3d12Device, d3d12Queue, cmdAllocator.Get(), [this](RND_D3D12::CommandContext<true>* context) {
             context->GetRecordList()->SetName(L"transitionInitialTextures");
             for (int i = 0; i < 2; ++i) {
-                this->m_textures[OpenXR::EyeSide::LEFT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
-                this->m_textures[OpenXR::EyeSide::RIGHT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
-                this->m_depthTextures[OpenXR::EyeSide::LEFT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
-                this->m_depthTextures[OpenXR::EyeSide::RIGHT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
-                context->Signal(this->m_textures[OpenXR::EyeSide::LEFT][i].get(), 0);
-                context->Signal(this->m_textures[OpenXR::EyeSide::RIGHT][i].get(), 0);
-                context->Signal(this->m_depthTextures[OpenXR::EyeSide::LEFT][i].get(), 0);
-                context->Signal(this->m_depthTextures[OpenXR::EyeSide::RIGHT][i].get(), 0);
+                // AMD GPU FIX: Use D3D12_RESOURCE_STATE_COMMON for cross-API shared resources.
+                // AMD strictly enforces that shared resources must be in COMMON state for Vulkan access.
+                this->m_textures[OpenXR::EyeSide::LEFT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
+                this->m_textures[OpenXR::EyeSide::RIGHT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
+                this->m_depthTextures[OpenXR::EyeSide::LEFT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
+                this->m_depthTextures[OpenXR::EyeSide::RIGHT][i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
+                // AMD GPU FIX: Don't signal 0! The fence is created at 0, so signaling 0 is invalid.
+                // Vulkan will wait for 0 on first copy, which is already satisfied.
             }
         });
     }
@@ -269,14 +269,46 @@ void RND_Renderer::Layer3D::Render(OpenXR::EyeSide side, long frameIdx) {
         texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         depthTexture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
+        // AMD GPU FIX: Transition OpenXR swapchain images to render target states
+        // OpenXR swapchain images are acquired in COMMON state. AMD strictly enforces this.
+        D3D12_RESOURCE_BARRIER preBarriers[2] = {};
+        preBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        preBarriers[0].Transition.pResource = m_swapchains[side]->GetTexture();
+        preBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+        preBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        preBarriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        preBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        preBarriers[1].Transition.pResource = m_depthSwapchains[side]->GetTexture();
+        preBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+        preBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        preBarriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        context->GetRecordList()->ResourceBarrier(2, preBarriers);
+
         m_presentPipelines[side]->BindAttachment(0, texture->d3d12GetTexture());
         m_presentPipelines[side]->BindAttachment(1, depthTexture->d3d12GetTexture(), DXGI_FORMAT_R32_FLOAT);
         m_presentPipelines[side]->BindTarget(0, m_swapchains[side]->GetTexture(), m_swapchains[side]->GetFormat());
         m_presentPipelines[side]->BindDepthTarget(m_depthSwapchains[side]->GetTexture(), m_depthSwapchains[side]->GetFormat());
         m_presentPipelines[side]->Render(context->GetRecordList(), m_swapchains[side]->GetTexture());
 
-        texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
-        depthTexture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
+        // AMD GPU FIX: Transition OpenXR swapchain images back to COMMON
+        D3D12_RESOURCE_BARRIER postBarriers[2] = {};
+        postBarriers[0].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        postBarriers[0].Transition.pResource = m_swapchains[side]->GetTexture();
+        postBarriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        postBarriers[0].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
+        postBarriers[0].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        postBarriers[1].Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        postBarriers[1].Transition.pResource = m_depthSwapchains[side]->GetTexture();
+        postBarriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        postBarriers[1].Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
+        postBarriers[1].Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        context->GetRecordList()->ResourceBarrier(2, postBarriers);
+
+        // AMD GPU FIX: Transition to COMMON before handing back to Vulkan.
+        // Shared resources MUST be in D3D12_RESOURCE_STATE_COMMON for cross-API access.
+        // AMD strictly enforces this; NVIDIA is lenient.
+        texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
+        depthTexture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
         // AMD GPU FIX: Use monotonically increasing fence values
         context->Signal(texture.get(), texture->GetD3D12SignalValue());
         context->Signal(depthTexture.get(), depthTexture->GetD3D12SignalValue());
@@ -387,8 +419,9 @@ RND_Renderer::Layer2D::Layer2D(VkExtent2D extent) {
         RND_D3D12::CommandContext<true> transitionInitialTextures(d3d12Device, d3d12Queue, cmdAllocator.Get(), [this](RND_D3D12::CommandContext<true>* context) {
             context->GetRecordList()->SetName(L"transitionInitialTextures");
             for (int i = 0; i < 2; ++i) {
-                this->m_textures[i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
-                context->Signal(this->m_textures[i].get(), 0);
+                // AMD GPU FIX: Use D3D12_RESOURCE_STATE_COMMON for cross-API shared resources.
+                this->m_textures[i]->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
+                // AMD GPU FIX: Don't signal 0! The fence is created at 0, so signaling 0 is invalid.
             }
         });
     }
@@ -429,11 +462,31 @@ void RND_Renderer::Layer2D::Render(long frameIdx) {
         context->WaitFor(texture.get(), texture->GetD3D12WaitValue());
         texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
+        // AMD GPU FIX: Transition OpenXR swapchain image to render target state
+        D3D12_RESOURCE_BARRIER preBarrier = {};
+        preBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        preBarrier.Transition.pResource = m_swapchain->GetTexture();
+        preBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+        preBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        preBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        context->GetRecordList()->ResourceBarrier(1, &preBarrier);
+
         m_presentPipeline->BindAttachment(0, texture->d3d12GetTexture());
         m_presentPipeline->BindTarget(0, m_swapchain->GetTexture(), m_swapchain->GetFormat());
         m_presentPipeline->Render(context->GetRecordList(), m_swapchain->GetTexture());
 
-        texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COPY_DEST);
+        // AMD GPU FIX: Transition OpenXR swapchain image back to COMMON
+        D3D12_RESOURCE_BARRIER postBarrier = {};
+        postBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        postBarrier.Transition.pResource = m_swapchain->GetTexture();
+        postBarrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        postBarrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COMMON;
+        postBarrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        context->GetRecordList()->ResourceBarrier(1, &postBarrier);
+
+        // AMD GPU FIX: Transition to COMMON before handing back to Vulkan.
+        // Shared resources MUST be in D3D12_RESOURCE_STATE_COMMON for cross-API access.
+        texture->d3d12TransitionLayout(context->GetRecordList(), D3D12_RESOURCE_STATE_COMMON);
         // AMD GPU FIX: Use monotonically increasing fence values
         context->Signal(texture.get(), texture->GetD3D12SignalValue());
     });
