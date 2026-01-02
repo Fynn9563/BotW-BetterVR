@@ -505,6 +505,9 @@ std::vector<XrCompositionLayerQuad> RND_Renderer::Layer2D::FinishRendering(XrTim
     glm::quat headOrientation = ToGLM(spaceLocation.pose.orientation);
     glm::vec3 headPosition = ToGLM(spaceLocation.pose.position);
 
+    constexpr float DISTANCE = 1.35f;
+    constexpr float LERP_SPEED = 0.05f;
+
     if (CemuHooks::GetSettings().UIFollowsLookingDirection()) {
         m_currentOrientation = glm::slerp(m_currentOrientation, headOrientation, LERP_SPEED);
         glm::vec3 forwardDirection = headOrientation * glm::vec3(0.0f, 0.0f, -1.0f);
@@ -533,7 +536,7 @@ std::vector<XrCompositionLayerQuad> RND_Renderer::Layer2D::FinishRendering(XrTim
     const float height = aspectRatio <= 1.0f ? 1.0f / aspectRatio : 1.0f;
 
     // todo: change space to head space if we want to follow the head
-    constexpr float MENU_SIZE = 1.0f;
+    constexpr float MENU_SIZE = 0.775f;
 
     std::vector<XrCompositionLayerQuad> layers;
 
