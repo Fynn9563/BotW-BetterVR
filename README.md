@@ -141,6 +141,8 @@ There's enough that was skipped over or left out in this explanation.
    `vcpkg install openxr-loader:x64-windows-static-md glm:x64-windows-static-md vulkan-headers:x64-windows-static-md imgui:x64-windows-static-md`
 
 3. Change the CMakeUserPresets.json file to contain the directory where you've stored vcpkg. Its currently hardcoded.
+   If you want to use [Meta XR Simulator](https://developers.meta.com/horizon/downloads/package/meta-xr-simulator-windows/) (which is quite helpful during debugging), you should change its path now too.
+   **Meta XR Simulator doesn't work unless you edit the `[install folder]/config/sim_core_configuration.json` file from `    "disable_interop": false,` to `    "disable_interop": true,`.**
 
 4. [Optional] Download and extract a new Cemu installation to the Cemu folder that's included.
    This step is technically not required, but it's the default install location and makes debugging much easier.
